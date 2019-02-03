@@ -7,9 +7,6 @@ let edges = []; // ベクトルの集合
 let graph;
 const EDGE_NUM = 4;
 const SEGMENT_NUM = 4;
-//const START = 0;
-//const MOVE = 1;
-//const ARRIVE = 2;
 
 let points = []; // 点の集合
 
@@ -67,8 +64,7 @@ function loadGraph(){
 class counter{
   constructor(){
     this.count = 0;
-    //this.state = START; // これだと汎用性がないから動いてる時true(isOnとかで表現)でそうでないときfalseでいいんじゃない
-    this.isOn = false;
+    this.isOn = false; // 動いてる時trueでそれ以外false
     this.limit;
     this.increaseValue;
   }
@@ -77,7 +73,6 @@ class counter{
     this.count = 0;
     this.limit = lim;
     this.increaseValue = incVal; // 1フレーム当たりの差分
-    //this.state = MOVE;
     this.isOn = true; // 起動
   }
   increase(){
@@ -98,8 +93,6 @@ class point{
     this.startIndex = index;
     this.endIndex = index;
     this.position = createVector(edges[index].x, edges[index].y); // edgeの位置からスタート
-    //console.log("construct point");
-    //console.log(this.position);
     this.speed = speed; // 1~5くらいを想定
     this.posCounter = new counter();
     this.segment;
@@ -111,8 +104,6 @@ class point{
     let nextEdgeIndex = intersectionData[this.startIndex * EDGE_NUM + this.endIndex];
     this.startIndex = this.endIndex;
     this.endIndex = nextEdgeIndex;
-    //console.log("next");
-    //console.log(edges[this.endIndex])
     let itv = intervalData[this.startIndex * EDGE_NUM + this.endIndex];
     this.segment = new segment(edges[this.startIndex], edges[this.endIndex], itv);
     this.posCounter.setCounter(itv, this.speed);
@@ -138,8 +129,6 @@ class segment{
     this.start = e1;
     this.end = e2;
     this.interval = itv;
-    //console.log(e1);
-    //console.log(e2);
   }
   calcPos(position, cnt){
     let vx = this.start.x + (this.end.x - this.start.x) * (cnt / this.interval);
