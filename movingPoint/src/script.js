@@ -7,12 +7,11 @@ let edges = []; // ベクトルの集合
 let graph;
 const EDGE_NUM = 4;
 const SEGMENT_NUM = 4;
-const START = 0;
-const MOVE = 1;
-const ARRIVE = 2;
-const PAUSE = 3;
+//const START = 0;
+//const MOVE = 1;
+//const ARRIVE = 2;
 
-let points = [];
+let points = []; // 点の集合
 
 function setup(){
   createCanvas(200, 200);
@@ -68,7 +67,8 @@ function loadGraph(){
 class counter{
   constructor(){
     this.count = 0;
-    this.state = START;
+    //this.state = START; // これだと汎用性がないから動いてる時true(isOnとかで表現)でそうでないときfalseでいいんじゃない
+    this.isOn = false;
     this.limit;
     this.increaseValue;
   }
@@ -76,16 +76,20 @@ class counter{
   setCounter(lim, incVal){
     this.count = 0;
     this.limit = lim;
-    this.increaseValue = incVal;
-    this.state = MOVE;
+    this.increaseValue = incVal; // 1フレーム当たりの差分
+    //this.state = MOVE;
+    this.isOn = true; // 起動
   }
   increase(){
-    if(this.state !== MOVE){ return this.state; }
-    this.count += this.increaseValue;
-    if(this.count === this.limit){ this.state = ARRIVE; }
-    return this.state;
+    if(this.isOn){
+      this.count += this.increaseValue;
+      if(this.count > this.limit){ this.isOn = false; }
+    }
+    return this.isOn;
   }
 }
+// カウンターを派生させて無限ループとか表現できるようにできたりするかも（カウントリセットするかどうかをオプション化）
+// 簡単なのはthis.loop = true/false だけれど
 
 // pointはどこかのedgeに出現して、その直後にsegmentをintersection経由で与えられて
 // 動き始める感じ。
@@ -94,28 +98,30 @@ class point{
     this.startIndex = index;
     this.endIndex = index;
     this.position = createVector(edges[index].x, edges[index].y); // edgeの位置からスタート
-    console.log("construct point");
-    console.log(this.position);
+    //console.log("construct point");
+    //console.log(this.position);
     this.speed = speed; // 1~5くらいを想定
     this.posCounter = new counter();
     this.segment;
     this.color = color;
   }
+  // constructorに初期のスタートとゴールのindex渡して1回目のsettingをconstructorで行うのもあり
+  // そうすれば反対方向に移動させたりできるでしょ、あるいはもっと処理を分割する。
   setting(){
     let nextEdgeIndex = intersectionData[this.startIndex * EDGE_NUM + this.endIndex];
     this.startIndex = this.endIndex;
     this.endIndex = nextEdgeIndex;
-    console.log("next");
-    console.log(edges[this.endIndex])
+    //console.log("next");
+    //console.log(edges[this.endIndex])
     let itv = intervalData[this.startIndex * EDGE_NUM + this.endIndex];
     this.segment = new segment(edges[this.startIndex], edges[this.endIndex], itv);
     this.posCounter.setCounter(itv, this.speed);
   }
   update(){
-    let state = this.posCounter.increase();
-    this.segment.calcPos(this.position, this.posCounter.cnt());
-    if(state === ARRIVE){
-      this.setting();
+    if(this.posCounter.increase()){
+      this.segment.calcPos(this.position, this.posCounter.cnt())
+    }else{
+      this.setting(); // カウンターがfalseになったら次のsegmentを探す
     }
   }
   draw(){
@@ -132,8 +138,8 @@ class segment{
     this.start = e1;
     this.end = e2;
     this.interval = itv;
-    console.log(e1);
-    console.log(e2);
+    //console.log(e1);
+    //console.log(e2);
   }
   calcPos(position, cnt){
     let vx = this.start.x + (this.end.x - this.start.x) * (cnt / this.interval);
