@@ -1,57 +1,21 @@
 'use strict';
 let graph; // graphのグローバルクラスをひとつだけ用意する
 
-//let points = []; // 点の集合
-
 function setup(){
   createCanvas(400, 400);
   graph = new graphData();
   addSquareVariation();   // variation[0]
   addPentagonVariation(); // variation[1]
+  addHexagonVariation();  // variation[2]
   graph.loadData();   // 頂点、辺、点の配置
-  //graph.setPoints(); // 点を置く
   graph.createGraph() // グラフ生成する
 }
 
 function draw(){
-  //background(220);
   image(graph.graphic, 0, 0);
-  /*points.forEach(function(p){
-    p.update();
-    p.draw();
-  })*/
   graph.updatePoints();
   graph.drawPoints();
 }
-/*
-function loadData(){
-  // グラフを作りましょう
-  //graph.loadEdges([40, 40, 120, 120], [40, 120, 40, 120]);
-  //graph.loadSegments([0, 2, 3, 1, 0, 2], [2, 3, 1, 0, 3, 1])
-  let pentaX = [];
-  let pentaY = [];
-  for(let k = 0; k < 5; k++){
-    pentaX.push(200 + 100 * sin(2 * PI * k / 5));
-    pentaY.push(200 - 100 * cos(2 * PI * k / 5));
-  }
-  graph.loadEdges(pentaX, pentaY);
-  graph.loadSegments([0, 1, 2, 3, 4, 0, 1, 2, 3, 4], [1, 2, 3, 4, 0, 2, 3, 4, 0, 1]);
-}*/
-/*
-function setPoints(){
-  // とりあえず点をたくさん作りましょう
-  generatePoint(0, 1, 2, 'red');
-  generatePoint(1, 2, 2, 'blue');
-  generatePoint(2, 3, 2, 'green');
-  generatePoint(3, 4, 2, 'orange');
-  generatePoint(4, 0, 2, 'black');
-  /*generatePoint(0, 1, 1, 'red');
-  generatePoint(0, 2, 3, 'blue');
-  generatePoint(3, 1, 2, 'green');
-  generatePoint(0, 3, 3, 'orange');
-  generatePoint(1, 2, 2, 'purple');
-  generatePoint(2, 3, 3, color(100, 120, 140));
-}*/
 
 function generatePoint(startIndex, goalIndex, speed, color){
   points.push(new point(graph.edges[startIndex], graph.edges[goalIndex], speed, color))
@@ -75,7 +39,7 @@ class counter{
     if(this.isOn){
       this.count += this.increaseValue;
       // この仕様変更により、increaseValueでlimitが割り切れなくても、
-      // もっというとincreaseValueが小数とかでもちゃんとedgeで方向が変化するようになった（さっき知った）
+      // もっというとincreaseValueが小数とかでもちゃんとedgeで方向が変化する
       if(this.count > this.limit){ this.isOn = false; }
     }
     return this.isOn;
@@ -83,14 +47,14 @@ class counter{
 }
 
 function addSquareVariation(){
-  let a0 = [40, 160, 40, 160];
-  let a1 = [40, 40, 160, 160];
-  let a2 = [0, 1, 2, 3, 0, 1];
-  let a3 = [1, 3, 0, 2, 3, 2];
-  let a4 = [0, 1, 2, 3];
-  let a5 = [1, 3, 0, 2];
-  let a6 = [2, 1, 3, 2];
-  let a7 = ['red', 'blue', 'green', 'orange'];
+  let a0 = [100, 200, 300, 300, 300, 200, 100, 100];
+  let a1 = [100, 100, 100, 200, 300, 300, 300, 200];
+  let a2 = [0, 1, 2, 3, 4, 5, 6, 7, 1, 2, 0, 7];
+  let a3 = [1, 2, 3, 4, 5, 6, 7, 0, 6, 5, 3, 4];
+  let a4 = [0, 0, 0];
+  let a5 = [1, 3, 7];
+  let a6 = [2, 3, 4];
+  let a7 = ['red', 'blue', 'green'];
   graph.variations.push(new variation(a0, a1, a2, a3, a4, a5, a6, a7));
 }
 
@@ -103,10 +67,26 @@ function addPentagonVariation(){
   }
   let a2 = [0, 1, 2, 3, 4, 0, 1, 2, 3, 4];
   let a3 = [1, 2, 3, 4, 0, 2, 3, 4, 0, 1];
-  let a4 = [0, 1, 2, 3, 4];
-  let a5 = [1, 2, 3, 4, 0];
-  let a6 = [2, 3, 1, 3, 2];
-  let a7 = ['red', 'green', 'blue', 'brown', 'orange'];
+  let a4 = [0, 0, 0, 0];
+  let a5 = [1, 2, 3, 4];
+  let a6 = [2, 3, 4, 3];
+  let a7 = ['red', 'green', 'blue', 'orange'];
+  graph.variations.push(new variation(a0, a1, a2, a3, a4, a5, a6, a7));
+}
+
+function addHexagonVariation(){
+  let a0 = [200];
+  let a1 = [200];
+  for(let k = 0; k < 6; k++){
+    a0.push(200 - 100 * sin(PI * k / 3));
+    a1.push(200 - 100 * cos(PI * k / 3));
+  }
+  let a2 = [0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6];
+  let a3 = [1, 2, 3, 4, 5, 6, 2, 3, 4, 5, 6, 1];
+  let a4 = [0, 0, 0, 0, 0, 0];
+  let a5 = [1, 2, 3, 4, 5, 6];
+  let a6 = [2, 2.5, 3, 3.5, 4, 4.5];
+  let a7 = ['red', 'blue', 'green', 'orange', 'brown', 'black'];
   graph.variations.push(new variation(a0, a1, a2, a3, a4, a5, a6, a7));
 }
 
@@ -119,10 +99,10 @@ class graphData{
     this.graphic = createGraphics(width, height);
     this.graphic.background(220);
     this.variations = []; // variation.
-    this.currentVariationIndex = 1; // 最初は0番
+    this.currentVariationIndex = 0; // 最初は0番
   }
   addEdge(x, y){
-    // 同じ頂点は追加できないようにしたいけどな・・(バリデーション)
+    // 同じ頂点は追加できないようにしたいけど・・(バリデーション)
     this.edges.push(new edge(x, y));
     console.log(x, y);
   }
@@ -163,6 +143,25 @@ class graphData{
     // e1Dataの点からe2Dataの点に線を引くイメージ(indexの配列)
     for(let i = 0; i < e1Data.length; i++){ this.addSegment(this.edges[e1Data[i]], this.edges[e2Data[i]]); }
   }
+  deleteGraph(){
+    // データのクリア
+    this.edges = [];
+    this.segments = [];
+    this.points = [];
+    this.graphic.background(220);
+  }
+  generatePoint(startIndex, goalIndex, speed, color){
+    this.points.push(new point(this.edges[startIndex], this.edges[goalIndex], speed, color));
+  }
+  loadData(){
+    // データロード
+    let vn = this.variations[this.currentVariationIndex];
+    this.loadEdges(vn.edgeX, vn.edgeY);
+    this.loadSegments(vn.segStart, vn.segGoal);
+    for(let i = 0; i < vn.pointStartIndex.length; i++){
+      this.generatePoint(vn.pointStartIndex[i], vn.pointGoalIndex[i], vn.pointSpeeds[i], vn.pointColors[i]);
+    }
+  }
   createGraph(){
     // edgeとsegmentのデータからグラフを生成
     this.segments.forEach(function(s){
@@ -172,50 +171,21 @@ class graphData{
       this.graphic.ellipse(e.x, e.y, 10, 10);
     }, this)
   }
-  deleteGraph(){
-    // データのクリア
-    this.edges = [];
-    this.segments = [];
-    this.graphic.background(220);
-    this.points = []; // これgraphに持たせるか・・
-  }
-  loadData(){
-    // データロード
-    /*
-    let pentaX = [];
-    let pentaY = [];
-    for(let k = 0; k < 5; k++){
-      pentaX.push(200 + 100 * sin(2 * PI * k / 5));
-      pentaY.push(200 - 100 * cos(2 * PI * k / 5));
-    }
-    this.loadEdges(pentaX, pentaY);
-    this.loadSegments([0, 1, 2, 3, 4, 0, 1, 2, 3, 4], [1, 2, 3, 4, 0, 2, 3, 4, 0, 1]);*/
-    let vn = this.variations[this.currentVariationIndex];
-    this.loadEdges(vn.edgeX, vn.edgeY);
-    this.loadSegments(vn.segStart, vn.segGoal);
-    for(let i = 0; i < vn.pointStartIndex.length; i++){
-      this.generatePoint(vn.pointStartIndex[i], vn.pointGoalIndex[i], vn.pointSpeeds[i], vn.pointColors[i]);
-    }
-  }
-  generatePoint(startIndex, goalIndex, speed, color){
-    this.points.push(new point(this.edges[startIndex], this.edges[goalIndex], speed, color));
-  }/*
-  setPoints(){
-    // 点の配置
-    this.generatePoint(0, 1, 2, 'red');
-    this.generatePoint(1, 2, 2, 'blue');
-    this.generatePoint(2, 3, 2, 'green');
-    this.generatePoint(3, 4, 2, 'orange');
-    this.generatePoint(4, 0, 2, 'black');
-  }*/
   updatePoints(){
     this.points.forEach(function(p){ p.update(); })
   }
   drawPoints(){
     this.points.forEach(function(p){ p.draw(); })
   }
-  // そのうちアクティブに追加できるようにしたいけどね
+  // そのうちアクティブに追加できるようにしたい
   // そうなるとedge固有のindexとか連番じゃなくなったりする可能性があるから区別してる
+  loadNextVariation(){
+    // 次のバリエーションに変更
+    this.deleteGraph();
+    this.currentVariationIndex = (this.currentVariationIndex + 1) % this.variations.length;
+    this.loadData();
+    this.createGraph();
+  }
 }
 
 class point{
@@ -242,8 +212,6 @@ class point{
     // step4: あとはposCounterにセットするだけ。
     let currentEdge = (this.moveFlag ? this.segment.goal : this.segment.start);
     let nextSegment = currentEdge.convert(this.segment);
-    //console.log(currentEdge);
-    //console.log(nextSegment);
     this.moveFlag = (nextSegment.start.index === currentEdge.index ? true : false);
     this.segment = nextSegment;
     this.posCounter.setCounter(this.segment.interval, this.speed);
@@ -296,10 +264,19 @@ class edge{
     // 次のsegmentを指定
     let currentIndex = this.getIndex(segment);
     if(currentIndex < 0){ return; } // みつからないとき
-    let nextIndex = (currentIndex + this.diff) % this.multiple; // this.diffだけずらしていく
-    //console.log(nextIndex);
+    //let nextIndex = (currentIndex + this.diff) % this.multiple; // this.diffだけずらしていく
+    // ランダム化してみる
+    let nextIndex = currentIndex;
+    if(this.multiple > 1){
+      nextIndex = (currentIndex + randInt(this.multiple - 1) + 1) % this.multiple;
+    }
     return this.connected[nextIndex]; // 次なるsegmentを返す
   }
+}
+
+// 0~n-1のどれか
+function randInt(n){
+  return Math.floor(random(n));
 }
 
 class segment{
@@ -354,3 +331,7 @@ segment.index = 0; // 辺の連番
 // クリックでバリエーションを変化させるとか？
 // クリア→データロード→点配置をクリックするたびにやるとか
 // あるいは選べるようにしても面白そうね
+
+function mouseClicked(){
+  graph.loadNextVariation(); // 別のバリエーションが現れる
+}
