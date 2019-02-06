@@ -93,12 +93,15 @@ function addHexagonVariation(){
 // グラフのデータ色々（グラフ自体の描画とか・・頂点や辺の追加と削除もここで行う）
 class graphData{
   constructor(){
-    this.edges = [];
-    this.segments = [];
-    this.points = []; // 点の集合もグラフに持たせる
-    this.graphic = createGraphics(width, height);
-    this.graphic.background(220);
-    this.variations = []; // variation.
+    this.edges = []; // 各々の頂点と・・
+    this.segments = []; // 頂点の間の辺、というかもっと抽象化して「つながり」
+    this.points = []; // その上を走るactorのようなもの
+    this.graphic = createGraphics(width, height); // 点とその間のつながりを表現する実体・・クラスにすべきかなぁ
+    // ここ↑をクラスにすることにより、その、つまり、骨組み（skeleton?）・・あー、なるほど・・
+    // 骨組みでひとつのクラスにするべきなんだ。で、actor達も、実体としてのグラフィックもクラスにしないとあれ。
+    // actorの集まり・・Troupeみたいな？そういうクラスをだね・・pointsの代わりにね・・
+    this.graphic.background(220); // ここもgraphicは別で色々・・
+    this.variations = []; // variation. // 骨組みの実体化としてのバリエーション
     this.currentVariationIndex = 0; // 最初は0番
   }
   addEdge(x, y){
