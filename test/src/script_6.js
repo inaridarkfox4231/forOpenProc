@@ -9,6 +9,7 @@ function setup(){
   colorLoad();
   noStroke();
   angleMode(DEGREES);
+  console.log(random([1, 2, 3, 4, 5]));
 }
 
 function draw(){
