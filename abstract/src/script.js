@@ -28,14 +28,26 @@ function draw(){
   //if(frameCount > 120){ noLoop(); }
 }
 
+// for debug.
 function keyTyped(){
   if(key === 'p'){ noLoop(); }
   if(key === 'q'){ loop(); }
 }
 
+// counter.
+// how to use:
+// 現在のカウントを手に入れる→getCnt().
+// isOnのときカウントが動き、そうでないとき動いてない。状態の取得→getState().
+// setting: limはcounterが停止するポイントを指定する、-1にすると無限ループになる。
+// diffは差分。いくつとびでカウンターが進むかを指定する。
+// progress()でカウンターが進む。isOnでなければやることは何もない。
+// isOnでもlimitが-1ならカウンターは進めない。ただtrueを返すだけ。
+// isOnでlimitが0以上のときは進めて、limitを超えたらoffにしてfalseを返す。
+// この、trueならカウンターが進みfalseを返すという挙動により各種の、
+// カウンターが一定の値に達した後の処理を行うことができる。
+// pauseは純粋なカウンターの一時停止を行う。
 class counter{
   constructor(){
-    // カウンター
     this.cnt = 0;
     this.isOn = false;
     this.limit; // -1のときの挙動どうするかな
@@ -43,8 +55,8 @@ class counter{
   }
   getCnt(){ return this.cnt; }
   getState(){ return this.isOn; } // 状態の取得
-  setting(lim, diff, startCnt = 0){
-    this.cnt = startCnt;
+  setting(lim, diff){
+    this.cnt = 0;
     this.limit = lim;
     this.increaseValue = diff;
     this.isOn = true;
@@ -82,6 +94,7 @@ class loopCounter extends counter{
 
 class reversibleCounter extends counter{
   // limitから減っていく流れを表現できるカウンター（双方向のやつに使う）
+  // 返す値の所だけ分離してそこだけいじる。これにより、値の増加量の符号をいじらなくて済む（すごい！）
   constructor(){
     super();
     this.reverse = false;
@@ -92,14 +105,31 @@ class reversibleCounter extends counter{
   getCnt(){ if(!this.reverse){ return this.cnt; }else{ return this.limit - this.cnt; } }
 }
 
+class reverseLoopCounter extends reversibleCounter{
+  constructor(){
+    // 値が行ったり来たりするカウンター(increaseValueは正とする)
+    super();
+  }
+  progress(){
+    if(this.isOn){
+      this.cnt += this.increaseValue;
+      if(this.cnt > this.limit || this.cnt < 0){
+        if(this.cnt < 0){ this.cnt = -this.cnt; }else{ this.cnt = this.cnt - this.limit; }
+        this.changeReverse();
+      }
+    }
+    return this.isOn;
+  }
+}
+
 class state{
   // actorに持たせるspotもしくはflowです
   constructor(){
     this.span; // 時間的、空間的なへだたり(グラフ作るときに使うから無くさないでください)
     this.timer = new counter(); // カウンター
   }
-  setting(){} // 逆じゃない？まずconvertで次のstateを取得した後、
-  convert(){} // そのstateにsettingを施す。
+  convert(){} // 逆じゃない？まずconvertで次のstateを取得した後、
+  setting(){} // そのstateにsettingを施す。
   action(){}  // 各フレームにおける演技内容
 }
 
@@ -195,6 +225,7 @@ class point extends spot{
     return nextMove;
   }
   action(pos){
+    pos.set(this.x, this.y); // この位置に止める。そのくらいはいいでしょ。
     return false; // カウンターもクソもない
   }
 }
