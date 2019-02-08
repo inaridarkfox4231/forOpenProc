@@ -11,7 +11,7 @@ let flow2;
 let flow3;
 let movefig;
 
-let emperor;
+let graph;
 
 function setup(){
   createCanvas(400, 400);
@@ -41,14 +41,14 @@ function setup(){
   hub1.outFlow.push(flow1);
   hub2.outFlow.push(flow2);
   movefig = new movingCircle(hub0, 2, color('blue'), 10);*/
-  emperor = new entity();
-  emperor.loadData();
-  emperor.createGraph();
+  graph = new entity();
+  graph.loadData();
+  graph.createGraph();
 }
 
 function draw(){
-  image(emperor.baseGraph, 0, 0);
-  emperor.movefigs.forEach(function(mf){
+  image(graph.baseGraph, 0, 0);
+  graph.movefigs.forEach(function(mf){
     mf.update();
     mf.display();
   })
@@ -57,7 +57,12 @@ function draw(){
 }
 
 function keyTyped(){
-  if(key ==='q'){noLoop();}
+  if(key ==='p'){ noLoop(); }
+  if(key === 'q'){ loop(); }
+}
+
+function mouseClicked(){
+  graph.switchPattern();
 }
 
 // カウンター（計測用）
@@ -174,44 +179,45 @@ class actor{
 }
 
 class movingCircle extends actor{
-  constructor(h, speed, _color, radius){
+  constructor(h, speed, fillColor, diam){
     super(h, speed);
-    this.visual = new circle(_color, radius);
+    this.visual = new circle(fillColor, diam);
   }
 }
 
 class movingSquare extends actor{
-  constructor(h, speed, _color, size, rolling = false){
+  constructor(h, speed, fillColor, size, rolling = false){
     super(h, speed);
-    this.visual = new square(_color, size, rolling);
+    this.visual = new square(fillColor, size, rolling);
+    console.log("createSquare");
   }
 }
 
 class figure{
-  constructor(_color){
-    this.color = _color;
+  constructor(fillColor){
+    this.color = fillColor;
   }
   display(pos){};
 }
 
 class circle extends figure{
-  constructor(_color, radius){
-    super(_color);
-    this.radius = radius;
+  constructor(fillColor, diam){
+    super(fillColor);
+    this.diam = diam;
   }
   display(pos){
     push();
     translate(pos.x, pos.y);
     noStroke();
     fill(this.color);
-    ellipse(0, 0, this.radius * 2, this.radius * 2);
+    ellipse(0, 0, this.diam, this.diam);
     pop();
   }
 }
 
 class square extends figure{
-  constructor(_color, size, rolling){
-    super(_color);
+  constructor(fillColor, size, rolling){
+    super(fillColor);
     this.size = size;
     this.rolling = rolling; // 回転するか否か
     this.rotation = 0;
@@ -223,7 +229,7 @@ class square extends figure{
     noStroke();
     fill(this.color);
     rotate(this.rotation++);
-    rect(-size * 0.5, -size * 0.5, size, size);
+    rect(-this.size * 0.5, -this.size * 0.5, this.size, this.size);
   }
 }
 
@@ -234,6 +240,7 @@ class entity{
     this.movefigs = [];
     this.baseGraph = createGraphics(width, height);
     this.patternIndex = 0;
+    this.patternNum = 3; // 総数
     console.log(this.baseGraph);
   }
   reset(){
@@ -256,25 +263,63 @@ class entity{
     }, this)
     console.log(5);
     this.hubs.forEach(function(h){
-      this.baseGraph.ellipse(h.x, h.y, 20, 20);
+      this.baseGraph.ellipse(h.x, h.y, 10, 10);
     }, this)
     console.log(3);
   }
+  switchPattern(){
+    this.reset();
+    this.patternIndex = (this.patternIndex + 1) % this.patternNum;
+    this.loadData();
+    this.createGraph();
+  }
 }
 
+// そのうち登録・・なんだっけregist？registメソッド作って簡単にするから待ってて
+
 function createPattern0(){
-  let posx = [100, 300, 300, 100];
-  let posy = [100, 100, 300, 300];
+  let posX = [100, 300, 300, 100];
+  let posY = [100, 100, 300, 300];
   for(let i = 0; i < 4; i++){
-    emperor.hubs.push(new hub(posx[i], posy[i]));
+    graph.hubs.push(new hub(posX[i], posY[i]));
   }
   let inHubs = [0, 1, 2, 3];
   let outHubs = [1, 2, 3, 0];
   for(let i = 0; i < 4; i++){
-    emperor.flows.push(new straightFlow(emperor.hubs[inHubs[i]], emperor.hubs[outHubs[i]]));
-    emperor.hubs[inHubs[i]].outFlow.push(emperor.flows[i]);
+    graph.flows.push(new straightFlow(graph.hubs[inHubs[i]], graph.hubs[outHubs[i]]));
+    graph.hubs[inHubs[i]].outFlow.push(graph.flows[i]);
   }
-  let mf = new movingCircle(emperor.hubs[0], 2, color('red'), 10);
-  emperor.movefigs.push(mf);
+  let mf = new movingCircle(graph.hubs[0], 2, color('red'), 10);
+  graph.movefigs.push(mf);
   console.log(1);
+}
+
+function createPattern1(){
+  let posX = [100, 300, 200];
+  let posY = [100, 100, 200];
+  for(let i = 0; i < 3; i++){
+    graph.hubs.push(new hub(posX[i], posY[i]));
+  }
+  let inHubs = [0, 1, 2];
+  let outHubs = [1, 2, 0];
+  for(let i = 0; i < 3; i++){
+    graph.flows.push(new straightFlow(graph.hubs[inHubs[i]], graph.hubs[outHubs[i]]));
+    graph.hubs[inHubs[i]].outFlow.push(graph.flows[i]);
+  }
+  let mf = new movingSquare(graph.hubs[0], 2, color('blue'), 10, true);
+  graph.movefigs.push(mf);
+}
+
+function createPattern2(){
+  for(let i = 0; i < 5; i++){
+    let x = 200 + 100 * cos(72 * i);
+    let y = 200 + 100 * sin(72 * i);
+    graph.hubs.push(new hub(x, y));
+  }
+  for(let i = 0; i < 5; i++){
+    graph.flows.push(new straightFlow(graph.hubs[i % 5], graph.hubs[(i + 1) % 5]));
+    graph.hubs[i].outFlow.push(graph.flows[i]);
+  }
+  let mf = new movingCircle(graph.hubs[0], 2, color('orange'), 10);
+  graph.movefigs.push(mf);
 }
