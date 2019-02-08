@@ -1,324 +1,290 @@
-// abstract graph.
+// 具体化しようよ
+'use strict';
 
-let p1;
-let p2;
-let m1;
-let m2;
-let mf;
+let graph;
 
 function setup(){
-  createCanvas(200, 200);
-  p1 = new point(50, 100);
-  p2 = new point(150, 100);
-  m1 = new straightMove(p1, p2);
-  m2 = new straightMove(p2, p1);
-  p1.inFlow.push(m2);
-  p1.outFlow.push(m1);
-  p2.inFlow.push(m1);
-  p2.outFlow.push(m2);
-  mf = new movingCircle(p1, 2, color('red'));
-  //noLoop();
+  createCanvas(400, 400);
+  angleMode(DEGREES);
+  graph = new entity();
+  graph.loadData();
+  graph.createGraph();
 }
 
 function draw(){
-  //console.log("Hello");
-
-  background(230);
-  mf.execute();
-  //if(frameCount > 120){ noLoop(); }
+  image(graph.baseGraph, 0, 0);
+  graph.movefigs.forEach(function(mf){
+    mf.update();
+    mf.display();
+  })
+  //movefig.update();
+  //movefig.display();
 }
 
-// for debug.
 function keyTyped(){
-  if(key === 'p'){ noLoop(); }
+  if(key ==='p'){ noLoop(); }
   if(key === 'q'){ loop(); }
 }
 
-// counter.
-// how to use:
-// 現在のカウントを手に入れる→getCnt().
-// isOnのときカウントが動き、そうでないとき動いてない。状態の取得→getState().
-// setting: limはcounterが停止するポイントを指定する、-1にすると無限ループになる。
-// diffは差分。いくつとびでカウンターが進むかを指定する。
-// progress()でカウンターが進む。isOnでなければやることは何もない。
-// isOnでもlimitが-1ならカウンターは進めない。ただtrueを返すだけ。
-// isOnでlimitが0以上のときは進めて、limitを超えたらoffにしてfalseを返す。
-// この、trueならカウンターが進みfalseを返すという挙動により各種の、
-// カウンターが一定の値に達した後の処理を行うことができる。
-// pauseは純粋なカウンターの一時停止を行う。
+function mouseClicked(){
+  graph.switchPattern();
+}
+
+// カウンター（計測用）
 class counter{
   constructor(){
     this.cnt = 0;
     this.isOn = false;
-    this.limit; // -1のときの挙動どうするかな
-    this.increaseValue; // 増分（負の場合もある）
+    this.limit; // 限界(-1のときは無限ループ)
+    this.diff;  // 増分
   }
-  getCnt(){ return this.cnt; }
-  getState(){ return this.isOn; } // 状態の取得
   setting(lim, diff){
     this.cnt = 0;
-    this.limit = lim;
-    this.increaseValue = diff;
     this.isOn = true;
+    this.limit = lim;
+    this.diff = diff;
   }
-  progress(){
-    if(this.isOn){
-      this.cnt += this.increaseValue;
-      if(this.limit < 0){ return true; } // limitが-1のときは無限ループ
-      if(this.cnt > this.limit){ this.isOn = false; } // limitを超えたら停止
-    }
+  getCnt(){ return this.cnt; }
+  getState(){ return this.isOn; }
+  progress(){ this.cnt += this.diff; } // 進める
+  check(){
+    if(this.cnt > this.limit && this.limit >= 0){ this.isOn = false; } // limit-1のときは無限ループ、
     return this.isOn;
   }
-  pause(){ // 停止と再生(cntはそのまま)
-    this.isOn = !this.isOn;
-  }
+  pause(){ this.isOn = !this.isOn; } // 一時停止
+  quit(){ this.cnt = 0; this.isOn = false; } // 中途終了
 }
-// normalCounter: 普通のカウンター。limitもincreaseValueも正。
-// infiniteCounter: 無限に値が増加し続ける。limit = -1, increaseValue > 0.
-// waitCounter: limit = -1でずーっと何もしないし0しか返さない。
-// トリガーでsettingが発動したらそこからnormalCounterになり一定時間の後終了する。
 
-class loopCounter extends counter{
-  constructor(){
-    // 値がループするカウンター
-    super();
+// stateからflowとhub作るの楽しいんだけど、
+// とりあえず具体化もうちょっとやってからでいいです。
+class hub{
+  // 結節点
+  constructor(x, y){
+    this.x = x;
+    this.y = y;
+    this.outFlow = []; //outだけ。とりあえず。
   }
-  progress(){
-    if(this.isOn){ // こうしないとpauseできない
-      this.cnt += this.increaseValue;
-      if(this.cnt > this.limit){ this.cnt -= this.limit; } // スイッチはonのまま。
-    }
-    return this.isOn;
+  convert(){
+    let nextFlowIndex = randomInt(this.outFlow.length);
+    return this.outFlow[nextFlowIndex];
   }
 }
 
-class reversibleCounter extends counter{
-  // limitから減っていく流れを表現できるカウンター（双方向のやつに使う）
-  // 返す値の所だけ分離してそこだけいじる。これにより、値の増加量の符号をいじらなくて済む（すごい！）
-  constructor(){
-    super();
-    this.reverse = false;
+function randomInt(n){ return Math.floor(random(n)); } // 0, 1, 2, ..., n-1 のどれかを返す汎用関数
+
+class flow{
+  // 流れ
+  constructor(h1, h2){
+    this.from = h1; // 入口hub
+    this.to = h2; // 出口hub
+    this.span; // さしわたし
   }
-  changeReverse(){
-    this.reverse = !this.reverse;
-  }
-  getCnt(){ if(!this.reverse){ return this.cnt; }else{ return this.limit - this.cnt; } }
+  calcPos(pos, cnt){}
+  // あとはtoにconvertしてもらうだけ。
+  drawOrbit(gr){}
 }
 
-class reverseLoopCounter extends reversibleCounter{
-  constructor(){
-    // 値が行ったり来たりするカウンター(increaseValueは正とする)
-    super();
+class straightFlow extends flow{
+  constructor(h1, h2){
+    super(h1, h2);
+    this.span = sqrt((h1.x - h2.x) * (h1.x - h2.x) + (h1.y - h2.y) * (h1.y - h2.y));
   }
-  progress(){
-    if(this.isOn){
-      this.cnt += this.increaseValue;
-      if(this.cnt > this.limit || this.cnt < 0){
-        if(this.cnt < 0){ this.cnt = -this.cnt; }else{ this.cnt = this.cnt - this.limit; }
-        this.changeReverse();
-      }
-    }
-    return this.isOn;
+  calcPos(pos, cnt){
+    pos.x = map(cnt, 0, this.span, this.from.x, this.to.x);
+    pos.y = map(cnt, 0, this.span, this.from.y, this.to.y);
   }
-}
-
-class state{
-  // actorに持たせるspotもしくはflowです
-  constructor(){
-    this.span; // 時間的、空間的なへだたり(グラフ作るときに使うから無くさないでください)
-    this.timer = new counter(); // カウンター
-  }
-  convert(){} // 逆じゃない？まずconvertで次のstateを取得した後、
-  setting(){} // そのstateにsettingを施す。
-  action(){}  // 各フレームにおける演技内容
-}
-
-// たとえばactorがmovingFigureで位置の変更とかするとしても
-// 渡すのは位置ベクトルだけでいいわけでしょ。そんだけ。
-
-class spot extends state{
-  constructor(){
-    super();
-    this.inFlow = [];   // 入ってくるflow
-    this.outFlow = [];  // 出ていくflow
+  drawOrbit(gr){
+    gr.strokeWeight(1.0);
+    gr.line(this.from.x, this.from.y, this.to.x, this.to.y);
   }
 }
 
-class doubleSpot extends state{
-  // inとoutが同じflowからなるspot
-  constructor(){
-    super();
-    this.inoutFlow = []; // つまり同じセットということね（2つ同じセットを持つのが無駄）
+class circleFlow extends flow{
+  constructor(h1, h2, cx, cy, radius, ph1, ph2){
+    super(h1, h2);
+    this.cx = cx;
+    this.cy = cy;
+    this.radius = radius;
+    this.ph1 = ph1; // 開始位相
+    this.ph2 = ph2; // 終了位相
+    this.span = ph2 - ph1;
   }
-}
-
-class flow extends state{
-  constructor(){
-    super();
-    this.from;  // 始点となる対象
-    this.to;    // 終点となる対象
+  calcPos(pos, cnt){
+    pos.x = this.cx + this.radius * cos(this.ph1 + cnt);
+    pos.y = this.cy + this.radius * sin(this.ph1 + cnt);
   }
-}
-
-class doubleFlow extends state{
-  // from と to が同じflow(いわゆる車輪型)
-  constructor(){
-    super();
-    this.pivot; // スタートとゴールが同じspot.
+  drawOrbit(gr){
+    gr.strokeWeight(1.0);
+    gr.arc(this.cx, this.cy, 2 * this.radius, 2 * this.radius, this.ph1, this.ph2);
   }
 }
 
 class actor{
-  constructor(){
-    this.state; // spotもしくはflow
+  constructor(h, speed){
+    this.pos = createVector(h.x, h.y);
+    this.move = h.convert(); // 所持flow.
+    this.speed = speed;
+    this.timer = new counter;
+    this.timer.setting(this.move.span, this.speed);
+    this.visual = new figure(); // 表現
   }
-  convert(){
-    // convertって書けばflowの場合は普通にtoを返すしspotの場合は普通に計算結果を返す。
+  setting(){
+    this.move = this.move.to.convert();
+    this.timer.setting(this.move.span, this.speed);
   }
-  execute(){} // たとえばまあvisualのclassにdisplayさせるとかそういう(displayのが一般的らしい)
-}
-
-class relation{
-  // 関係性（もはや関係だけ、具体性ゼロ）
-  constructor(){
-    this.spots = [];
-    this.flows = [];
+  update(){
+    if(!this.timer.getState()){ return; }
+    this.timer.progress();
+    this.move.calcPos(this.pos, this.timer.getCnt());
+    if(!this.timer.check()){ this.setting(); } // counter check.
   }
-  // 連携の作成
-  createRelation(){}
-  // リセット
-  reset(){}
-}
-
-// そろそろ具体化したいけどね・・
-class entity{
-  constructor(){
-    this.field = new relation(); // なにかしらのrelation.
-    this.troop = []; // actorの集団（？？）
-  }
-  // actorの追加と削除
-  addActor(){}
-  deleteActor(){}
-  update(){ this.troop.forEach(function(a){ a.update(); }) }
-  execute(){ this.troop.forEach(function(a){ a.execute(); }) }
-}
-
-// 抽象論が続いたので具体化します（tukareta）
-// ここからは具体例。あれを実現します。たくさんの点をつなぐグラフの上を
-// 縦横無尽に好き勝手に点が飛び回る「あれ」を実装します。
-// 名付けて「movingFigure」、はい。
-// 一応すべての点に入る点と出る点があるとし常に立ち止まらないとする。
-
-// ひとつの具体化
-class point extends spot{
-  // 要するに、点。visualはrelationの具体化の時にやるからいい。
-  constructor(x, y){
-    super();
-    this.x = x; // 位置
-    this.y = y;
-    this.span = 0; // 立ち止まらない感じで。立ち止まるんでもいいんだけどまあ具体化だから。
-  }
-  setting(_actor){ return; }
-  convert(){
-    let nextMove = random(this.outFlow); // めちゃ適当
-    //nextMove.setting();
-    return nextMove;
-  }
-  action(pos){
-    pos.set(this.x, this.y); // この位置に止める。そのくらいはいいでしょ。
-    return false; // カウンターもクソもない
+  display(){
+    this.visual.display(this.pos); // ここで描画
   }
 }
 
-// straightMoveじゃない可能性を残しておきたいのでそこは継承で・・・・
-class move extends flow{
-  constructor(p1, p2){
-    super();
-    this.from = p1;
-    this.to = p2;
-  }
-  setting(_actor){
-    // カウンター関係
-  }
-  convert(){
-    return this.to; // まあそうよね
-  }
-  action(pos){
-    // posをいじる
+class movingCircle extends actor{
+  constructor(h, speed, fillColor, diam){
+    super(h, speed);
+    this.visual = new circle(fillColor, diam);
   }
 }
 
-class straightMove extends move{
-  constructor(p1, p2){
-    super(p1, p2);
-    this.span = sqrt((p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y));
-  }
-  setting(_actor){
-    this.timer.setting(this.span, _actor.speed);
-  }
-  action(pos){ // ←posは_actorにすべきなんでしょうね
-    // まず、getStateでfalseが返ってきたら何もしないでtrueを返す。
-    // getStateがtrueならprogressを実行
-    // その結果を格納しておく
-    // progressの後何かしらのaction, 結果を返す。
-    // この結果の部分以外は共通みたい。
-    if(!this.timer.getState()){ return true; }
-    let flag = this.timer.progress();
-    let cnt = this.timer.getCnt();
-    pos.x = map(cnt, 0, this.span, this.from.x, this.to.x);
-    pos.y = map(cnt, 0, this.span, this.from.y, this.to.y);
-    return flag;
-  }
-}
-
-class movingFigure extends actor{
-  constructor(p, speed){
-    super();
-    this.state = p; // どっかのspotからスタート
-    this.pos = createVector(p.x, p.y); // で、位置を与えられて・・あとは？
-    this.visual = new figure();
-    this.speed = speed; // speed忘れてた(increaseValue)
-  }
-  convert(){
-    this.state = this.state.convert();
-    //console.log(this);
-    this.state.setting(this);
-  }
-  execute(){
-    // actionでfalseが返ってきたらconvertするけど
-    // trueが返ってきたらしない。ともかくactionさせる。
-    if(!this.state.action(this.pos)){ this.convert(); };
-    this.visual.display(this.pos); // このくらいしかやることがない
-  }
-}
-
-class movingCircle extends movingFigure{
-  constructor(p, speed, _color){
-    super(p, speed);
-    this.visual = new circle(_color); // こんだけ
+class movingSquare extends actor{
+  constructor(h, speed, fillColor, size, rolling = false){
+    super(h, speed);
+    this.visual = new square(fillColor, size, rolling);
+    console.log("createSquare");
   }
 }
 
 class figure{
-  constructor(){}
-  display(){}
+  constructor(fillColor){
+    this.color = fillColor;
+  }
+  display(pos){};
 }
 
 class circle extends figure{
-  constructor(color, radius = 10){
-    super();
-    this.color = color;
-    this.radius = radius;
+  constructor(fillColor, diam){
+    super(fillColor);
+    this.diam = diam;
   }
   display(pos){
     push();
     translate(pos.x, pos.y);
-    fill(this.color);
-    //console.log(this.color);
     noStroke();
-    ellipse(0, 0, this.radius, this.radius);
+    fill(this.color);
+    ellipse(0, 0, this.diam, this.diam);
     pop();
   }
 }
 
-// とりあえずテスト成功？
+class square extends figure{
+  constructor(fillColor, size, rolling){
+    super(fillColor);
+    this.size = size;
+    this.rolling = rolling; // 回転するか否か
+    this.rotation = 0;
+    if(rolling){ this.rotation = random(360); }
+  }
+  display(pos){
+    push();
+    translate(pos.x, pos.y);
+    noStroke();
+    fill(this.color);
+    rotate(this.rotation++);
+    rect(-this.size * 0.5, -this.size * 0.5, this.size, this.size);
+  }
+}
+
+class entity{
+  constructor(){
+    this.hubs = [];
+    this.flows = [];
+    this.movefigs = [];
+    this.baseGraph = createGraphics(width, height);
+    this.patternIndex = 0;
+    this.patternNum = 3; // 総数
+    console.log(this.baseGraph);
+  }
+  reset(){
+    this.hubs = [];
+    this.flows = [];
+    this.movefigs = [];
+  }
+  loadData(){
+    let id = this.patternIndex;
+    if(id === 0){ createPattern0(); }
+    else if(id === 1){ createPattern1(); }
+    else if(id === 2){ createPattern2();}
+    console.log(2);
+  }
+  createGraph(){
+    this.baseGraph.background(230);
+    console.log(4);
+    this.flows.forEach(function(f){
+      f.drawOrbit(this.baseGraph);
+    }, this)
+    console.log(5);
+    this.hubs.forEach(function(h){
+      this.baseGraph.ellipse(h.x, h.y, 10, 10);
+    }, this)
+    console.log(3);
+  }
+  switchPattern(){
+    this.reset();
+    this.patternIndex = (this.patternIndex + 1) % this.patternNum;
+    this.loadData();
+    this.createGraph();
+  }
+}
+
+// そのうち登録・・なんだっけregist？registメソッド作って簡単にするから待ってて
+
+function createPattern0(){
+  let posX = [100, 300, 300, 100];
+  let posY = [100, 100, 300, 300];
+  for(let i = 0; i < 4; i++){
+    graph.hubs.push(new hub(posX[i], posY[i]));
+  }
+  let inHubs = [0, 1, 2, 3];
+  let outHubs = [1, 2, 3, 0];
+  for(let i = 0; i < 4; i++){
+    graph.flows.push(new straightFlow(graph.hubs[inHubs[i]], graph.hubs[outHubs[i]]));
+    graph.hubs[inHubs[i]].outFlow.push(graph.flows[i]);
+  }
+  let mf = new movingCircle(graph.hubs[0], 2, color('red'), 10);
+  graph.movefigs.push(mf);
+  console.log(1);
+}
+
+function createPattern1(){
+  let posX = [100, 300, 200];
+  let posY = [100, 100, 200];
+  for(let i = 0; i < 3; i++){
+    graph.hubs.push(new hub(posX[i], posY[i]));
+  }
+  let inHubs = [0, 1, 2];
+  let outHubs = [1, 2, 0];
+  for(let i = 0; i < 3; i++){
+    graph.flows.push(new straightFlow(graph.hubs[inHubs[i]], graph.hubs[outHubs[i]]));
+    graph.hubs[inHubs[i]].outFlow.push(graph.flows[i]);
+  }
+  let mf = new movingSquare(graph.hubs[0], 2, color('blue'), 10, true);
+  graph.movefigs.push(mf);
+}
+
+function createPattern2(){
+  for(let i = 0; i < 5; i++){
+    let x = 200 + 100 * cos(72 * i);
+    let y = 200 + 100 * sin(72 * i);
+    graph.hubs.push(new hub(x, y));
+  }
+  for(let i = 0; i < 5; i++){
+    graph.flows.push(new straightFlow(graph.hubs[i % 5], graph.hubs[(i + 1) % 5]));
+    graph.hubs[i].outFlow.push(graph.flows[i]);
+  }
+  let mf = new movingCircle(graph.hubs[0], 2, color('orange'), 10);
+  graph.movefigs.push(mf);
+}
