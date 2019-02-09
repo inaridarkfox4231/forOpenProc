@@ -7,7 +7,6 @@ let graph;
 
 function setup(){
   createCanvas(400, 400);
-  //angleMode(DEGREES);
   graph = new entity();
   graph.loadData();
   graph.createGraph();
@@ -19,8 +18,6 @@ function draw(){
     mf.update();
     mf.display();
   })
-  //movefig.update();
-  //movefig.display();
 }
 
 function keyTyped(){
@@ -123,15 +120,28 @@ class circleFlow extends flow{
     this.radius = radius;
     this.rad1 = rad1; // 開始位相
     this.rad2 = rad2; // 終了位相（補間で変化する）
-    this.span = radius * (rad2 - rad1); //ここを円弧の長さにします
+    this.span = radius * abs(rad2 - rad1); //ここを円弧の長さにします
   }
   calcPos(pos, cnt){
     pos.x = this.cx + this.radius * cos(map(cnt, 0, this.span, this.rad1, this.rad2));
     pos.y = this.cy + this.radius * sin(map(cnt, 0, this.span, this.rad1, this.rad2));
   }
   drawOrbit(gr){
+    let minRad = min(this.rad1, this.rad2);
+    let maxRad = max(this.rad1, this.rad2);
+    gr.push();
     gr.strokeWeight(1.0);
-    gr.arc(this.cx, this.cy, 2 * this.radius, 2 * this.radius, this.rad1, this.rad2);
+    gr.noFill();
+    gr.arc(this.cx, this.cy, 2 * this.radius, 2 * this.radius, minRad, maxRad);
+    gr.translate(this.to.x, this.to.y);
+    let directionVector = createVector(-(this.to.y - this.cy), this.to.x - this.cx);
+    if(this.rad1 > this.rad2){ directionVector.mult(-1); }
+    gr.rotate(directionVector.heading());
+    let arrowSize = 7;
+    gr.translate(-HUB_RADIUS - arrowSize, 0);
+    gr.fill(0);
+    gr.triangle(0, arrowSize / 2, 0, -arrowSize / 2, arrowSize, 0);
+    gr.pop();
   }
 }
 
@@ -149,6 +159,7 @@ class actor{
   }
   setting(){
     this.move = this.move.to.convert();
+    //console.log(this.move.to);
     this.timer.setting(this.move.span, this.speed);
   }
   update(){
@@ -264,8 +275,24 @@ class entity{
   }
   registStraightFlow(inHubsId, outHubsId, n){
     for(let i = 0; i < n; i++){
-      this.flows.push(new straightFlow(this.hubs[inHubsId[i]], this.hubs[outHubsId[i]]));
-      this.hubs[inHubsId[i]].outFlow.push(this.flows[i]);
+      let inHub = this.hubs[inHubsId[i]];
+      let outHub = this.hubs[outHubsId[i]];
+      //console.log(inHub);
+      //console.log(outHub);
+      let newFlow = new straightFlow(inHub, outHub)
+      this.flows.push(newFlow);
+      inHub.outFlow.push(newFlow);
+    }
+  }
+  registCircleFlow(inHubsId, outHubsId, cxs, cys, radiuses, rad1s, rad2s, n){
+    for(let i = 0; i < n; i++){
+      let inHub = this.hubs[inHubsId[i]];
+      let outHub = this.hubs[outHubsId[i]];
+      console.log(inHub);
+      console.log(outHub);
+      let newFlow = new circleFlow(inHub, outHub, cxs[i], cys[i], radiuses[i], rad1s[i], rad2s[i])
+      this.flows.push(newFlow);
+      inHub.outFlow.push(newFlow);
     }
   }
   setCircle(hubId, speed, selfColor, radius){
@@ -296,29 +323,48 @@ function createPattern0(){
 }
 
 function createPattern1(){
-  let posX = [100, 300, 200];
-  let posY = [100, 100, 200];
-  for(let i = 0; i < 3; i++){
-    graph.hubs.push(new hub(posX[i], posY[i]));
+  let posX = [];
+  let posY = [];
+  posX.push(200);
+  posY.push(200);
+  for(let i = 0; i < 8; i++){
+    posX.push(200 + 60 * cos(i * PI / 4));
+    posY.push(200 + 60 * sin(i * PI / 4));
+    posX.push(200 + 120 * cos(i * PI / 4));
+    posY.push(200 + 120 * sin(i * PI / 4));
   }
-  let inHubs = [0, 1, 2];
-  let outHubs = [1, 2, 0];
-  for(let i = 0; i < 3; i++){
-    graph.flows.push(new straightFlow(graph.hubs[inHubs[i]], graph.hubs[outHubs[i]]));
-    graph.hubs[inHubs[i]].outFlow.push(graph.flows[i]);
+
+  graph.registHub(posX, posY, 17);
+  //console.log(graph.hubs[0]);
+  let inHubsId = [1, 5, 9, 13, 0, 0, 0, 0, 1, 5, 9, 13, 4, 8, 12, 16];
+  let outHubsId = [0, 0, 0, 0, 3, 7, 11, 15, 2, 6, 10, 14, 3, 7, 11, 15];
+  graph.registStraightFlow(inHubsId, outHubsId, 16);
+  inHubsId = [1, 15, 13, 11, 9, 7, 5, 3, 2, 4, 6, 8, 10, 12, 14, 16];
+  outHubsId = [15, 13, 11, 9, 7, 5, 3, 1, 4, 6, 8, 10, 12, 14, 16, 2];
+  let cxs = [];
+  let cys = [];
+  let radiuses = [];
+  let rad1s = [];
+  let rad2s = [];
+  for(let i = 0; i < 16; i++){
+    cxs.push(200);
+    cys.push(200);
   }
+  for(let i = 0; i < 8; i++){ radiuses.push(60); rad1s.push((PI / 4) * (8 - i)); rad2s.push((PI / 4) * (7 - i)); }
+  for(let i = 0; i < 8; i++){ radiuses.push(120); rad1s.push((PI / 4) * i); rad2s.push((PI / 4) * (i + 1)); }
+  graph.registCircleFlow(inHubsId, outHubsId, cxs, cys, radiuses, rad1s, rad2s, 16);
   let mf = new movingSquare(graph.hubs[0], 2, color('blue'), 20, 0.1);
   graph.movefigs.push(mf);
 }
 
 function createPattern2(){
   for(let i = 0; i < 5; i++){
-    let x = 200 + 100 * cos(2 * i * PI / 5);
-    let y = 200 + 100 * sin(2 * i * PI / 5);
+    let x = 200 + 100 * sin(2 * i * PI / 5);
+    let y = 200 - 100 * cos(2 * i * PI / 5);
     graph.hubs.push(new hub(x, y));
   }
   for(let i = 0; i < 5; i++){
-    graph.flows.push(new straightFlow(graph.hubs[i % 5], graph.hubs[(i + 1) % 5]));
+    graph.flows.push(new straightFlow(graph.hubs[i % 5], graph.hubs[(i + 2) % 5]));
     graph.hubs[i].outFlow.push(graph.flows[i]);
   }
   let mf = new movingCircle(graph.hubs[0], 2, color('orange'), 20);

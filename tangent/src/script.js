@@ -67,6 +67,11 @@ function drawTangent(t){
   leftEdge = (2 * t * (-200) - t * t) * 0.01 + 50;
   rightEdge = (2 * t * 200 - t * t) * 0.01 + 50;
   line(-200, leftEdge, 200, rightEdge);
+  push();
+  fill('blue');
+  noStroke();
+  ellipse(t, t * t * 0.01 + 50, 10, 10);
+  pop();
 }
 
 function drawArrow(base, vec, myColor = 'black', gr){
@@ -94,6 +99,12 @@ function drawArrow_pos(x1, y1, x2, y2, myColor = 'black', gr){
   drawArrow_vec(createVector(x1, y1), createVector(x2, y2), myColor, gr);
 }
 
+// アイデア
+// 媒介変数表示で4つ葉曲線の接線とか動かせたら面白いわね
+// クリックでグラフ差し替えて接線もぐりぐりいじるの
+
+// 以下はreverseLoopCounterの仕様（limitとdiffを決めるとdiffずつの変化で0とlimitの間をいったりきたり）
+// しかし実際にはcntは増え続けるのを延々と繰り返してて、返す値だけスイッチしてるの。だからdiffはずっと正。
 class counter{
   constructor(){
     this.cnt = 0;
