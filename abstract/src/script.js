@@ -4,9 +4,11 @@
 const HUB_RADIUS = 5;
 
 let graph;
+let actorGraphics = [];
 
 function setup(){
   createCanvas(400, 400);
+  createActorGraphics();
   graph = new entity();
   graph.loadData();
   graph.createGraph();
@@ -27,6 +29,13 @@ function keyTyped(){
 
 function mouseClicked(){
   graph.switchPattern();
+}
+
+function createActorGraphics(){
+  let circle = createGraphics(20, 20);
+  circle.fill(0);
+  circle.rect(0, 0, 20, 20);
+  actorGraphics.push(circle);
 }
 
 // カウンター（計測用）
@@ -153,9 +162,9 @@ class actor{
     this.pos = createVector(h.x, h.y);
     this.move = h.convert(); // 所持flow.
     this.speed = speed;
-    this.timer = new counter;
+    this.timer = new counter();
     this.timer.setting(this.move.span, this.speed);
-    this.visual = new figure(); // 表現
+    this.visual = new figure(0); // 表現
   }
   setting(){
     this.move = this.move.to.convert();
@@ -173,7 +182,7 @@ class actor{
     this.visual.display(this.pos); // ここで描画
   }
 }
-
+/*
 class movingCircle extends actor{
   constructor(h, speed, fillColor, diam){
     super(h, speed);
@@ -187,30 +196,30 @@ class movingSquare extends actor{
     this.visual = new square(fillColor, size, rolling);
     console.log("createSquare");
   }
-}
-
+}*/
+/*
 class figure{
   constructor(fillColor){
     this.color = fillColor;
   }
   display(pos){};
-}
+}*/
 
-class circle extends figure{
-  constructor(fillColor, diam){
-    super(fillColor);
-    this.diam = diam;
+class figure{
+  constructor(kind){
+    this.kind = kind;
+    this.rotation = random(2 * PI);
   }
   display(pos){
     push();
     translate(pos.x, pos.y);
-    noStroke();
-    fill(this.color);
-    ellipse(0, 0, this.diam, this.diam);
+    this.rotation += 0.1;
+    rotate(this.rotation);
+    image(actorGraphics[this.kind], -10, -10);
     pop();
   }
 }
-
+/*
 class square extends figure{
   constructor(fillColor, size, rollingSpeed){
     super(fillColor);
@@ -228,7 +237,7 @@ class square extends figure{
     rotate(this.rotation);
     rect(-this.size * 0.5, -this.size * 0.5, this.size, this.size);
   }
-}
+}*/
 
 class entity{
   constructor(){
@@ -319,7 +328,9 @@ function createPattern0(){
   let inHubsId = [0, 1, 3, 6, 2, 4, 7, 5, 8, 9, 14, 9, 5, 2, 13, 8, 4, 12, 7, 11, 1, 3, 4, 6, 7, 8, 10, 11, 12, 13];
   let outHubsId = [1, 3, 6, 10, 4, 7, 11, 8, 12, 13, 9, 5, 2, 0, 8, 4, 1, 7, 3, 6, 2, 4, 5, 7, 8, 9, 11, 12, 13, 14];
   graph.registStraightFlow(inHubsId, outHubsId, 30);
-  graph.setCircle(0, 2, color('red'), 15);
+  //graph.setCircle(0, 2, color('red'), 15);
+  let mf = new actor(graph.hubs[0], 2);
+  graph.movefigs.push(mf);
 }
 
 function createPattern1(){
@@ -353,7 +364,7 @@ function createPattern1(){
   for(let i = 0; i < 8; i++){ radiuses.push(60); rad1s.push((PI / 4) * (8 - i)); rad2s.push((PI / 4) * (7 - i)); }
   for(let i = 0; i < 8; i++){ radiuses.push(120); rad1s.push((PI / 4) * i); rad2s.push((PI / 4) * (i + 1)); }
   graph.registCircleFlow(inHubsId, outHubsId, cxs, cys, radiuses, rad1s, rad2s, 16);
-  let mf = new movingSquare(graph.hubs[0], 2, color('blue'), 20, 0.1);
+  let mf = new actor(graph.hubs[0], 2);
   graph.movefigs.push(mf);
 }
 
@@ -367,6 +378,6 @@ function createPattern2(){
     graph.flows.push(new straightFlow(graph.hubs[i % 5], graph.hubs[(i + 2) % 5]));
     graph.hubs[i].outFlow.push(graph.flows[i]);
   }
-  let mf = new movingCircle(graph.hubs[0], 2, color('orange'), 20);
+  let mf = new actor(graph.hubs[0], 2);
   graph.movefigs.push(mf);
 }
