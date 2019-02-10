@@ -129,6 +129,48 @@ class straightFlow extends flow{
   }
 }
 
+class easingFlow extends straightFlow{
+  // easingするやつ
+  constructor(h1, h2, id){
+    super(h1, h2);
+    this.easingId = id;
+  }
+  calcPos(pos, cnt){
+    let easedCnt = cnt + easingFlow.easing(cnt / this.span, this.easingId) * this.span;
+    pos.x = map(easedCnt, 0, this.span, this.from.x, this.to.x);
+    pos.y = map(easedCnt, 0, this.span, this.from.y, this.to.y);
+  }
+  static easing(x, id){
+    // xは0以上1以下の値で、返すのは0付近のある値(x=0とx=1で0になる)
+    if(id === 0){
+      //let y = x * (1 - x) * (x - 0.5) * 4; // ちょっとしたやつ
+      let y = (0.7 / PI) * sin(2 * PI * x); // 途中でちょっとためらう
+      return y;
+    }else if(id === 1){
+      let y = (1.5 / PI) * sin(PI * x); // backからのout
+      return y;
+    }else if(id === 2){
+      let y = (0.3 / PI) * sin(4 * PI * x);
+      return y;
+    }
+    return x;
+  }
+}
+
+class jumpFlow extends flow{
+  // ジャンプするやつ
+  constructor(h1, h2){
+    super(h1, h2);
+    this.span = sqrt((h1.x - h2.x) * (h1.x - h2.x) + (h1.y - h2.y) * (h1.y - h2.y));
+  }
+  calcPos(pos, cnt){
+    pos.x = map(cnt, 0, this.span, this.from.x, this.to.x);
+    pos.y = map(cnt, 0, this.span, this.from.y, this.to.y);
+    pos.y -= (2 / this.span) * cnt * (this.span - cnt); // 高さはとりあえずthis.span/2にしてみる
+  }
+  drawOrbit(gr){ return; }
+}
+
 class circleFlow extends flow{
   constructor(h1, h2, cx, cy, radius, rad1, rad2){
     // rad1, rad2はふたつのラジアンで反時計回りに進む、はず。
@@ -150,6 +192,8 @@ class circleFlow extends flow{
   drawOrbit(gr){
     let minRad = min(this.rad1, this.rad2);
     let maxRad = max(this.rad1, this.rad2);
+    // 矢印描くところはメソッド化するべきかも。
+    // 先っちょの座標とベクトルさえあればいいので。
     gr.push();
     gr.strokeWeight(1.0);
     gr.noFill();
@@ -174,13 +218,15 @@ class actor{
     this.pos = createVector(h.x, h.y);
     this.move = h.convert(); // 所持flow.
     this.speed = speed;
-    this.timer = new counter();
+    this.timer = new counter(); // ()忘れてた。ごめんなさい。
     this.timer.setting(this.move.span, this.speed);
     this.visual = new figure(kind); // 表現
   }
   setting(){
     this.move = this.move.to.convert();
     //console.log(this.move.to);
+    // もしfactorを導入するならここでthis.move.spanをfactorで割ったうえで
+    // あっちの方でmap内のspanをfactorで割ってmap全体をfactor倍する感じですかね。
     this.timer.setting(this.move.span, this.speed);
   }
   update(){
@@ -260,9 +306,18 @@ class entity{
     for(let i = 0; i < n; i++){
       let inHub = this.hubs[inHubsId[i]];
       let outHub = this.hubs[outHubsId[i]];
-      //console.log(inHub);
-      //console.log(outHub);
       let newFlow = new straightFlow(inHub, outHub)
+      this.flows.push(newFlow);
+      inHub.outFlow.push(newFlow);
+    }
+  }
+  // あの・・冗長にもほどがあるでよ・・・・
+  registEasingFlow(inHubsId, outHubsId, easingId){
+    let n = inHubsId.length;
+    for(let i = 0; i < n; i++){
+      let inHub = this.hubs[inHubsId[i]];
+      let outHub = this.hubs[outHubsId[i]];
+      let newFlow = new easingFlow(inHub, outHub, easingId)
       this.flows.push(newFlow);
       inHub.outFlow.push(newFlow);
     }
@@ -272,9 +327,17 @@ class entity{
     for(let i = 0; i < n; i++){
       let inHub = this.hubs[inHubsId[i]];
       let outHub = this.hubs[outHubsId[i]];
-      console.log(inHub);
-      console.log(outHub);
       let newFlow = new circleFlow(inHub, outHub, cxs[i], cys[i], radiuses[i], rad1s[i], rad2s[i])
+      this.flows.push(newFlow);
+      inHub.outFlow.push(newFlow);
+    }
+  }
+  registJumpFlow(inHubsId, outHubsId){
+    let n = inHubsId.length;
+    for(let i = 0; i < n; i++){
+      let inHub = this.hubs[inHubsId[i]];
+      let outHub = this.hubs[outHubsId[i]];
+      let newFlow = new jumpFlow(inHub, outHub)
       this.flows.push(newFlow);
       inHub.outFlow.push(newFlow);
     }
@@ -345,16 +408,36 @@ function createPattern1(){
 }
 
 function createPattern2(){
+  for(let y = 0; y < 4; y++){
+    for(let x = 0; x < 4; x++){
+      graph.hubs.push(new hub(80 + x * 80, 80 + y * 80));
+    }
+  }
+  graph.registEasingFlow([1, 0, 8, 12, 14, 15, 7, 3], [0, 4, 12, 13, 15, 11, 3, 2], 0);
+  graph.registEasingFlow([1, 5, 8, 9, 14, 10, 7, 6], [5, 4, 9, 13, 10, 11, 6, 2], 1);
+  graph.registEasingFlow([4, 9, 13, 10, 11, 6, 2, 5], [8, 5, 14, 9, 7, 10, 1, 6], 2);
+  graph.registJumpFlow([1, 8, 14, 7], [8, 14, 7, 1]);
+  graph.registActors([0, 1], [2, 2], [2, 2]);
+}
+
+/*
+createPattern2(){
   for(let i = 0; i < 5; i++){
     let x = 200 + 100 * sin(2 * i * PI / 5);
     let y = 200 - 100 * cos(2 * i * PI / 5);
     graph.hubs.push(new hub(x, y));
   }
   for(let i = 0; i < 5; i++){
-    graph.flows.push(new straightFlow(graph.hubs[i % 5], graph.hubs[(i + 2) % 5]));
+    graph.flows.push(new easingFlow(graph.hubs[i % 5], graph.hubs[(i + 2) % 5], 2));
     graph.hubs[i].outFlow.push(graph.flows[i]);
   }
+  let f = new easingFlow(graph.hubs[0], graph.hubs[1], 0);
+  graph.flows.push(f);
+  graph.hubs[0].outFlow.push(f);
+  let jf = new jumpFlow(graph.hubs[0], graph.hubs[3]);
+  graph.flows.push(jf);
+  graph.hubs[0].outFlow.push(jf);
   //let mf = new actor(graph.hubs[0], 2, 2);
   //graph.movefigs.push(mf);
   graph.registActors([0, 1], [2, 2], [2, 2]);
-}
+}*/
