@@ -48,6 +48,13 @@ function createActorGraphics(){
   dia.quad(10, 0, 10 + 10 / sqrt(3), 10, 10, 20, 10 - 10 / sqrt(3), 10);
   dia.triangle(10, 20, 15, 10, 5, 10);
   actorGraphics.push(dia);
+  let syuriken = createGraphics(20, 20);
+  syuriken.noStroke();
+  syuriken.fill(0);
+  syuriken.quad(7, 6, 13, 0, 13, 14, 7, 20);
+  syuriken.quad(0, 7, 14, 7, 20, 13, 6, 13);
+  syuriken.quad();
+  actorGraphics.push(syuriken);
 }
 
 // カウンター（計測用）
@@ -311,7 +318,7 @@ class entity{
       inHub.outFlow.push(newFlow);
     }
   }
-  // あの・・冗長にもほどがあるでよ・・・・
+  // あの・・冗長にもほどがあるでよ・・・・辞書使えばいける？
   registEasingFlow(inHubsId, outHubsId, easingId){
     let n = inHubsId.length;
     for(let i = 0; i < n; i++){
@@ -342,7 +349,7 @@ class entity{
       inHub.outFlow.push(newFlow);
     }
   }
-  registActors(defaultHubsId, speeds, kinds){
+  registActor(defaultHubsId, speeds, kinds){
     let n = defaultHubsId.length;
     for(let i = 0; i < n; i++){
       let newActor = new actor(this.hubs[defaultHubsId[i]], speeds[i], kinds[i]);
@@ -368,7 +375,7 @@ function createPattern0(){
   //graph.setCircle(0, 2, color('red'), 15);
   //let mf = new actor(graph.hubs[0], 2, 1);
   //graph.movefigs.push(mf);
-  graph.registActors([0, 10, 14], [2, 2, 2], [0, 0, 0]);
+  graph.registActor([0, 10, 14], [2, 2, 2], [0, 0, 0]);
 }
 
 function createPattern1(){
@@ -404,7 +411,7 @@ function createPattern1(){
   graph.registCircleFlow(inHubsId, outHubsId, cxs, cys, radiuses, rad1s, rad2s);
   //let mf = new actor(graph.hubs[0], 2, 0);
   //graph.movefigs.push(mf);
-  graph.registActors([0, 0, 0, 0], [2, 3, 2, 3], [1, 1, 1, 1]);
+  graph.registActor([0, 0, 0, 0], [2, 3, 2, 3], [1, 1, 1, 1]);
 }
 
 function createPattern2(){
@@ -417,27 +424,6 @@ function createPattern2(){
   graph.registEasingFlow([1, 5, 8, 9, 14, 10, 7, 6], [5, 4, 9, 13, 10, 11, 6, 2], 1);
   graph.registEasingFlow([4, 9, 13, 10, 11, 6, 2, 5], [8, 5, 14, 9, 7, 10, 1, 6], 2);
   graph.registJumpFlow([1, 8, 14, 7], [8, 14, 7, 1]);
-  graph.registActors([0, 1], [2, 2], [2, 2]);
+  graph.registJumpFlow([4, 2, 11, 13], [2, 11, 13, 4]);
+  graph.registActor([0, 3, 15, 12], [2, 2, 3, 3], [2, 2, 2, 2]);
 }
-
-/*
-createPattern2(){
-  for(let i = 0; i < 5; i++){
-    let x = 200 + 100 * sin(2 * i * PI / 5);
-    let y = 200 - 100 * cos(2 * i * PI / 5);
-    graph.hubs.push(new hub(x, y));
-  }
-  for(let i = 0; i < 5; i++){
-    graph.flows.push(new easingFlow(graph.hubs[i % 5], graph.hubs[(i + 2) % 5], 2));
-    graph.hubs[i].outFlow.push(graph.flows[i]);
-  }
-  let f = new easingFlow(graph.hubs[0], graph.hubs[1], 0);
-  graph.flows.push(f);
-  graph.hubs[0].outFlow.push(f);
-  let jf = new jumpFlow(graph.hubs[0], graph.hubs[3]);
-  graph.flows.push(jf);
-  graph.hubs[0].outFlow.push(jf);
-  //let mf = new actor(graph.hubs[0], 2, 2);
-  //graph.movefigs.push(mf);
-  graph.registActors([0, 1], [2, 2], [2, 2]);
-}*/
