@@ -2,8 +2,8 @@
 'use strict';
 
 const HUB_RADIUS = 5;
-const PATTERN_NUM = 4;
-const GRAPHICS_NUM = 5;
+const PATTERN_NUM = 5;
+const GRAPHICS_NUM = 6;
 
 let graph;
 let actorGraphics = [];
@@ -25,8 +25,11 @@ function draw(){
 }
 
 function keyTyped(){
-  if(key ==='p'){ noLoop(); }
-  if(key === 'q'){ loop(); }
+  if(key === 'p'){ noLoop(); }
+  if(key === 'q'){
+    loop();
+    console.log(map(1.5, 0, 1, 20, 40));
+  }
 }
 
 function mouseClicked(){
@@ -61,7 +64,10 @@ function createActorGraphics(img, graphicsId){
     img.fill(255);
     img.ellipse(10, 10, 5, 5);
   }else if(graphicsId === 4){
-    img.fill(230, 177, 0);
+    img.fill(32, 168, 72);
+    img.quad(10, 2, 2, 18, 10, 10, 18, 18);
+  }else if(graphicsId === 5){
+    img.fill(244, 189, 0);
     for(let i = 0; i < 5; i++){
       img.triangle(10 - 10 * sin(2 * PI * i / 5), 10 - 10 * cos(2 * PI * i / 5), 10 - 5 * sin(2 * PI * i / 5 - PI / 10), 10 - 5 * cos(2 * PI * i / 5 - PI / 10), 10 - 5 * sin(2 * PI * i / 5 + PI / 10), 10 - 5 * cos(2 * PI * i / 5 + PI / 10));
     }
@@ -178,10 +184,26 @@ class easingFlow extends straightFlow{
       let y = 3 * pow(x, 4) - 2 * pow(x, 6); // 入口は4乗、出口は6乗。
       return y;
     }else if(id === 4){
-      let y = (3 / 5) * pow(x - 0.2, 2) - (1 / 15); // 多分バックインになるはず
+      let y = x * (2 * x - 1); // 多分バックインになるはず
       return y;
     }else if(id === 5){
-      let y = (16 / 15) - (5 / 3) * pow(x - 0.8, 2); // 多分バックアウト？
+      let y = 1 + (1 - x) * (2 * x - 1); // 多分バックアウト？
+      return y;
+    }else if(id === 6){
+      let y = x + 0.1 * sin(8 * PI * x); // ぐらぐら
+      return y;
+    }else if(id === 7){
+      let y = constrain(-12 * pow(x, 3) + 18 * pow(x, 2) - 5 * x, 0, 1); // 停止→移動→停止
+      return y;
+    }else if(id === 8){
+      let y = -12 * pow(x, 3) + 18 * pow(x, 2) - 5 * x; // さっきのやつで普通にバックインアウト
+      return y;
+    }else if(id === 9){
+      let y = (x / 8) + (7 / 8) * pow(x, 4); // ゆっくり→ぎゅーん
+      return y;
+    }else if(id === 10){
+      let y = (7 / 8) + (x / 8) - (7 / 8) * pow(1 - x, 4); // ぎゅーん→ゆっくり
+      return y;
     }
     return x;
   }
@@ -314,7 +336,6 @@ class entity{
     // その集合体としてentityを考える必要がある。それにより、
     // 個々のグラフの回転や平行移動が可能になるけどそれは別のsketchでやりましょうね・・
     this.patternIndex = 0;
-    //this.patternNum = 3; // 総数
     console.log(this.baseGraph);
   }
   reset(){
@@ -328,6 +349,7 @@ class entity{
     else if(id === 1){ createPattern1(); }
     else if(id === 2){ createPattern2();}
     else if(id === 3){ createPattern3(); }
+    else if(id === 4){ createPattern4(); }
     //console.log(2);
   }
   createGraph(){
@@ -464,6 +486,16 @@ function createPattern3(){
   for(let i = 0; i < 6; i++){ params[i]['factor'] = 2; params[i + 6]['factor'] = 4; }
   graph.registFlow([0, 3, 6, 9, 12, 15, 4, 1, 10, 7, 16, 13], [2, 1, 8, 7, 14, 13, 3, 5, 9, 11, 15, 17], params);
   graph.registActor([4, 10, 16], [1, 2, 3], [3, 3, 3]);
+}
+
+function createPattern4(){
+  // easingの実験？
+  graph.registHub(constSeq(100, 12).concat(constSeq(300, 12)), arSeq(30, 30, 12).concat(arSeq(30, 30, 12)));
+  let params = [{type: 'straight'}].concat(typeSeq('easing', 11));
+  for(let i = 1; i < 12; i++){ params[i]['easingId'] = i - 1; }
+  graph.registFlow(arSeq(0, 1, 12), arSeq(12, 1, 12), params);
+  graph.registFlow(arSeq(12, 1, 12), arSeq(0, 1, 12), typeSeq('straight', 12));
+  graph.registActor(arSeq(0, 1, 12), constSeq(2, 12), constSeq(4, 12));
 }
 
 // 配列関数
