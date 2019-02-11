@@ -53,7 +53,8 @@ function createActorGraphics(){
   syuriken.fill(0);
   syuriken.quad(7, 6, 13, 0, 13, 14, 7, 20);
   syuriken.quad(0, 7, 14, 7, 20, 13, 6, 13);
-  syuriken.quad();
+  syuriken.fill(255);
+  syuriken.ellipse(10, 10, 5, 5);
   actorGraphics.push(syuriken);
 }
 
@@ -308,6 +309,29 @@ class entity{
     let n = posX.length;
     for(let i = 0; i < n; i++){ this.hubs.push(new hub(posX[i], posY[i])); }
   }
+  // registFlowはパラメータを辞書に放り込んでコードの再利用をするもの。
+  registFlow(inHubsId, outHubsId, params){
+    // paramsは辞書の配列
+    let n = inHubsId.length;
+    for(let i = 0; i < n; i++){
+      let inHub = this.hubs[inHubsId[i]];
+      let outHub = this.hubs[outHubsId[i]];
+      let newFlow = this.createFlow(inHub, outHub, params[i]);
+      this.flows.push(newFlow);
+      inHub.outFlow.push(newFlow);
+    }
+  }
+  createFlow(h1, h2, pr){
+    if(pr['type'] === 'straight'){
+      return new straightFlow(h1, h2);
+    }else if(pr['type'] === 'easing'){
+      return new easingFlow(h1, h2, pr['easingId']);
+    }else if(pr['type'] === 'circle'){
+      return new circleFlow(h1, h2, pr['cx'], pr['cy'], pr['radius'], pr['rad1'], pr['rad2']);
+    }else if(pr['type'] === 'jump'){
+      return new jumpFlow(h1, h2);
+    }
+  }/*
   registStraightFlow(inHubsId, outHubsId){
     let n = inHubsId.length;
     for(let i = 0; i < n; i++){
@@ -317,7 +341,7 @@ class entity{
       this.flows.push(newFlow);
       inHub.outFlow.push(newFlow);
     }
-  }
+  }*/
   // あの・・冗長にもほどがあるでよ・・・・辞書使えばいける？
   registEasingFlow(inHubsId, outHubsId, easingId){
     let n = inHubsId.length;
@@ -357,7 +381,7 @@ class entity{
     }
   }
 }
-
+/*
 // そのうち登録・・なんだっけregist？registメソッド作って簡単にするから待ってて
 function createPattern0(){
   let posX = [];
@@ -372,45 +396,48 @@ function createPattern0(){
   let inHubsId = [0, 1, 3, 6, 2, 4, 7, 5, 8, 9, 14, 9, 5, 2, 13, 8, 4, 12, 7, 11, 1, 3, 4, 6, 7, 8, 10, 11, 12, 13];
   let outHubsId = [1, 3, 6, 10, 4, 7, 11, 8, 12, 13, 9, 5, 2, 0, 8, 4, 1, 7, 3, 6, 2, 4, 5, 7, 8, 9, 11, 12, 13, 14];
   graph.registStraightFlow(inHubsId, outHubsId);
-  //graph.setCircle(0, 2, color('red'), 15);
-  //let mf = new actor(graph.hubs[0], 2, 1);
-  //graph.movefigs.push(mf);
+  graph.registActor([0, 10, 14], [2, 2, 2], [0, 0, 0]);
+}*/
+
+function createPattern0(){
+  let posX = [];
+  let posY = [];
+  for(let x1 = 0; x1 < 5; x1++){
+    for(let x2 = 0; x2 <= x1; x2++){
+      posX.push(200 - 30 * x1 + 60 * x2);
+      posY.push(100 + 30 * sqrt(3) * x1);
+    }
+  }
+  graph.registHub(posX, posY);
+  let inHubsId = [0, 1, 3, 6, 2, 4, 7, 5, 8, 9, 14, 9, 5, 2, 13, 8, 4, 12, 7, 11, 1, 3, 4, 6, 7, 8, 10, 11, 12, 13];
+  let outHubsId = [1, 3, 6, 10, 4, 7, 11, 8, 12, 13, 9, 5, 2, 0, 8, 4, 1, 7, 3, 6, 2, 4, 5, 7, 8, 9, 11, 12, 13, 14];
+  let params = [];
+  for(let i = 0; i < inHubsId.length; i++){ params.push({type: 'straight'}); }
+  graph.registFlow(inHubsId, outHubsId, params);
+  //graph.registStraightFlow(inHubsId, outHubsId);
   graph.registActor([0, 10, 14], [2, 2, 2], [0, 0, 0]);
 }
 
 function createPattern1(){
-  let posX = [];
-  let posY = [];
-  posX.push(200);
-  posY.push(200);
-  for(let i = 0; i < 8; i++){
-    posX.push(200 + 60 * cos(i * PI / 4));
-    posY.push(200 + 60 * sin(i * PI / 4));
-    posX.push(200 + 120 * cos(i * PI / 4));
-    posY.push(200 + 120 * sin(i * PI / 4));
-  }
-
+  let posX = [200].concat(arCosSeq(0, PI / 4, 8, 60, 200)).concat(arCosSeq(0, PI / 4, 8, 120, 200));
+  let posY = [200].concat(arSinSeq(0, PI / 4, 8, 60, 200)).concat(arSinSeq(0, PI / 4, 8, 120, 200));
   graph.registHub(posX, posY);
-  //console.log(graph.hubs[0]);
-  let inHubsId = [1, 5, 9, 13, 0, 0, 0, 0, 1, 5, 9, 13, 4, 8, 12, 16];
-  let outHubsId = [0, 0, 0, 0, 3, 7, 11, 15, 2, 6, 10, 14, 3, 7, 11, 15];
-  graph.registStraightFlow(inHubsId, outHubsId, 16);
-  inHubsId = [1, 15, 13, 11, 9, 7, 5, 3, 2, 4, 6, 8, 10, 12, 14, 16];
-  outHubsId = [15, 13, 11, 9, 7, 5, 3, 1, 4, 6, 8, 10, 12, 14, 16, 2];
-  let cxs = [];
-  let cys = [];
-  let radiuses = [];
-  let rad1s = [];
-  let rad2s = [];
+  let inHubsId = [0, 0, 0, 0, 9, 11, 13, 15, 2, 4, 6, 8, 2, 4, 6, 8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 16, 15, 14, 13, 12, 11, 10];
+  let outHubsId = [1, 3, 5, 7, 1, 3, 5, 7, 0, 0, 0, 0, 10, 12, 14, 16, 2, 3, 4, 5, 6, 7, 8, 1, 16, 15, 14, 13, 12, 11, 10, 9];
+  let params = [];
+  for(let i = 0; i < 16; i++){ params.push({type:'straight'}); }
+  for(let i = 0; i < 16; i++){ params.push({type:'circle'}); }
+  let cxs = constSeq(200, 16);
+  let cys = constSeq(200, 16);
+  let radiuses = constSeq(60, 8).concat(constSeq(120, 8));
+  let rad1s = arSeq(0, PI / 4, 8).concat(arSeq(2 * PI, -PI / 4, 8));
+  let rad2s = arSeq(PI / 4, PI / 4, 8).concat(arSeq(7 * PI / 4, -PI / 4, 8));
   for(let i = 0; i < 16; i++){
-    cxs.push(200);
-    cys.push(200);
+    params[16 + i]['cx'] = cxs[i]; params[16 + i]['cy'] = cys[i]; params[16 + i]['radius'] = radiuses[i];
+    params[16 + i]['rad1'] = rad1s[i]; params[16 + i]['rad2'] = rad2s[i];
+    console.log(params[16 + i]);
   }
-  for(let i = 0; i < 8; i++){ radiuses.push(60); rad1s.push((PI / 4) * (8 - i)); rad2s.push((PI / 4) * (7 - i)); }
-  for(let i = 0; i < 8; i++){ radiuses.push(120); rad1s.push((PI / 4) * i); rad2s.push((PI / 4) * (i + 1)); }
-  graph.registCircleFlow(inHubsId, outHubsId, cxs, cys, radiuses, rad1s, rad2s);
-  //let mf = new actor(graph.hubs[0], 2, 0);
-  //graph.movefigs.push(mf);
+  graph.registFlow(inHubsId, outHubsId, params);
   graph.registActor([0, 0, 0, 0], [2, 3, 2, 3], [1, 1, 1, 1]);
 }
 
@@ -426,4 +453,36 @@ function createPattern2(){
   graph.registJumpFlow([1, 8, 14, 7], [8, 14, 7, 1]);
   graph.registJumpFlow([4, 2, 11, 13], [2, 11, 13, 4]);
   graph.registActor([0, 3, 15, 12], [2, 2, 3, 3], [2, 2, 2, 2]);
+}
+
+// 配列関数
+// これとconcutを組み合わせる。
+// [1, 2, 3].concat([4, 5])で[1, 2, 3, 4, 5]になる。
+
+function constSeq(c, n){
+  // cがn個。
+  let array = [];
+  for(let i = 0; i < n; i++){ array.push(c); }
+  return array;
+}
+
+function arSeq(start, interval, n){
+  // startからintervalずつn個
+  let array = [];
+  for(let i = 0; i < n; i++){ array.push(start + interval * i); }
+  return array;
+}
+
+function arCosSeq(start, interval, n, radius = 1, pivot = 0){
+  // startからintervalずつn個をradius * cos([]) の[]に放り込む。pivotは定数ずらし。
+  let array = [];
+  for(let i = 0; i < n; i++){ array.push(pivot + radius * cos(start + interval * i)); }
+  return array;
+}
+
+function arSinSeq(start, interval, n, radius = 1, pivot = 0){
+  // startからintervalずつn個をradius * sin([]) の[]に放り込む。pivotは定数ずらし。
+  let array = [];
+  for(let i = 0; i < n; i++){ array.push(pivot + radius * sin(start + interval * i)); }
+  return array;
 }
