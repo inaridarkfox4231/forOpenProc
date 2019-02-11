@@ -1,0 +1,2 @@
+// setterとgetterのテスト
+'use strict';

@@ -2,13 +2,15 @@
 'use strict';
 
 const HUB_RADIUS = 5;
+const PATTERN_NUM = 4;
+const GRAPHICS_NUM = 4;
 
 let graph;
 let actorGraphics = [];
 
 function setup(){
   createCanvas(400, 400);
-  createActorGraphics();
+  registActorGraphics();
   graph = new entity();
   graph.loadData();
   graph.createGraph();
@@ -31,31 +33,34 @@ function mouseClicked(){
   graph.switchPattern();
 }
 
-function createActorGraphics(){
-  let circle = createGraphics(20, 20);
-  circle.noStroke();
-  circle.fill(0, 0, 255);
-  circle.rect(3, 3, 14, 14);
-  actorGraphics.push(circle);
-  let tri = createGraphics(20, 20);
-  tri.noStroke();
-  tri.fill(255, 0, 0);
-  tri.triangle(10, 0, 10 + 5 * sqrt(3), 15, 10 - 5 * sqrt(3), 15);
-  actorGraphics.push(tri);
-  let dia = createGraphics(20, 20);
-  dia.noStroke();
-  dia.fill(187, 102, 187);
-  dia.quad(10, 0, 10 + 10 / sqrt(3), 10, 10, 20, 10 - 10 / sqrt(3), 10);
-  dia.triangle(10, 20, 15, 10, 5, 10);
-  actorGraphics.push(dia);
-  let syuriken = createGraphics(20, 20);
-  syuriken.noStroke();
-  syuriken.fill(0);
-  syuriken.quad(7, 6, 13, 0, 13, 14, 7, 20);
-  syuriken.quad(0, 7, 14, 7, 20, 13, 6, 13);
-  syuriken.fill(255);
-  syuriken.ellipse(10, 10, 5, 5);
-  actorGraphics.push(syuriken);
+// グラフィックの登録
+function registActorGraphics(){
+  for(let i = 0; i < GRAPHICS_NUM; i++){
+    let img = createGraphics(20, 20);
+    img.noStroke();
+    createActorGraphics(img, i);
+    actorGraphics.push(img);
+  }
+}
+
+// グラフィックの詳細
+function createActorGraphics(img, graphicsId){
+  if(graphicsId === 0){
+    img.fill(0, 0, 255);
+    img.rect(3, 3, 14, 14);
+  }else if(graphicsId === 1){
+    img.fill(255, 0, 0);
+    img.triangle(10, 0, 10 + 5 * sqrt(3), 15, 10 - 5 * sqrt(3), 15);
+  }else if(graphicsId === 2){
+    img.fill(187, 102, 187);
+    img.quad(10, 0, 10 + 10 / sqrt(3), 10, 10, 20, 10 - 10 / sqrt(3), 10);
+  }else if(graphicsId === 3){
+    img.fill(0);
+    img.quad(7, 6, 13, 0, 13, 14, 7, 20);
+    img.quad(0, 7, 14, 7, 20, 13, 6, 13);
+    img.fill(255);
+    img.ellipse(10, 10, 5, 5);
+  }
 }
 
 // カウンター（計測用）
@@ -107,6 +112,9 @@ class flow{
     this.to = h2; // 出口hub
     this.span; // さしわたし
   }
+  // getter大事。これで取得することにより、オーバーライドするにあたって
+  // 実際の値を変えずに返す値だけいじることができる。
+  getSpan(){ return this.span; }
   calcPos(pos, cnt){}
   // あとはtoにconvertしてもらうだけ。
   drawOrbit(gr){}
@@ -144,24 +152,43 @@ class easingFlow extends straightFlow{
     this.easingId = id;
   }
   calcPos(pos, cnt){
-    let easedCnt = cnt + easingFlow.easing(cnt / this.span, this.easingId) * this.span;
-    pos.x = map(easedCnt, 0, this.span, this.from.x, this.to.x);
-    pos.y = map(easedCnt, 0, this.span, this.from.y, this.to.y);
+    // easedは0~1の値で、easing functionでconvertした後のもの。
+    let eased = easingFlow.easing(cnt / this.span, this.easingId);
+    pos.x = map(eased, 0, 1, this.from.x, this.to.x);
+    pos.y = map(eased, 0, 1, this.from.y, this.to.y);
   }
   static easing(x, id){
     // xは0以上1以下の値で、返すのは0付近のある値(x=0とx=1で0になる)
     if(id === 0){
-      //let y = x * (1 - x) * (x - 0.5) * 4; // ちょっとしたやつ
-      let y = (0.7 / PI) * sin(2 * PI * x); // 途中でちょっとためらう
+      let y = 3 * pow(x, 2) - 2 * pow(x, 3); // 入口は2乗、出口は3乗。
       return y;
     }else if(id === 1){
-      let y = (1.5 / PI) * sin(PI * x); // backからのout
+      let y = 0.5 * (1 - cos(PI * x)); // cosを使った簡単なもの。
       return y;
     }else if(id === 2){
-      let y = (0.3 / PI) * sin(4 * PI * x);
+      let y = (50 / 23) * (-2 * pow(x, 3) + 3 * pow(x, 2) - 0.54 * x); // いわゆるBackInOutというやつ。0.1と0.9で極値。
       return y;
     }
     return x;
+  }
+}
+
+class factorFlow extends straightFlow{
+  // スピード可変. 例えばfactor0.5ならスピード半分、2.0ならスピード2倍
+  // spanを変化させると矢印の長さまで変化してしまうので、getterを上書きして、
+  // timerに返す値だけいじることにする。位置計算の際にもspanの値自体は変えないようにする。
+  constructor(h1, h2, factor){
+    super(h1, h2);
+    this.speedFactor = factor;
+  }
+  getSpan(){
+    // spanの値はタイマーセットの時しか使わないから、ここをいじってタイマーを伸び縮みさせる。
+    return this.span / this.speedFactor;
+  }
+  calcPos(pos, cnt){
+    // spanに相当するところをfactorで割る うまくいったね。
+    pos.x = map(cnt, 0, this.span / this.speedFactor, this.from.x, this.to.x);
+    pos.y = map(cnt, 0, this.span / this.speedFactor, this.from.y, this.to.y);
   }
 }
 
@@ -227,15 +254,14 @@ class actor{
     this.move = h.convert(); // 所持flow.
     this.speed = speed;
     this.timer = new counter(); // ()忘れてた。ごめんなさい。
-    this.timer.setting(this.move.span, this.speed);
+    //this.timer.setting(this.move.span, this.speed);
+    this.timer.setting(this.move.getSpan(), this.speed); // getterで取得するように変更
     this.visual = new figure(kind); // 表現
   }
   setting(){
     this.move = this.move.to.convert();
-    //console.log(this.move.to);
-    // もしfactorを導入するならここでthis.move.spanをfactorで割ったうえで
-    // あっちの方でmap内のspanをfactorで割ってmap全体をfactor倍する感じですかね。
-    this.timer.setting(this.move.span, this.speed);
+    //this.timer.setting(this.move.span, this.speed);
+    this.timer.setting(this.move.getSpan(), this.speed); // getterで取得するように変更
   }
   update(){
     if(!this.timer.getState()){ return; }
@@ -272,7 +298,7 @@ class entity{
     this.baseGraph = createGraphics(width, height);
     // patternをクラスにして・・
     this.patternIndex = 0;
-    this.patternNum = 3; // 総数
+    //this.patternNum = 3; // 総数
     console.log(this.baseGraph);
   }
   reset(){
@@ -285,6 +311,7 @@ class entity{
     if(id === 0){ createPattern0(); }
     else if(id === 1){ createPattern1(); }
     else if(id === 2){ createPattern2();}
+    else if(id === 3){ createPattern3(); }
     //console.log(2);
   }
   createGraph(){
@@ -301,7 +328,7 @@ class entity{
   }
   switchPattern(){
     this.reset();
-    this.patternIndex = (this.patternIndex + 1) % this.patternNum;
+    this.patternIndex = (this.patternIndex + 1) % PATTERN_NUM;
     this.loadData();
     this.createGraph();
   }
@@ -330,49 +357,13 @@ class entity{
       return new circleFlow(h1, h2, pr['cx'], pr['cy'], pr['radius'], pr['rad1'], pr['rad2']);
     }else if(pr['type'] === 'jump'){
       return new jumpFlow(h1, h2);
-    }
-  }/*
-  registStraightFlow(inHubsId, outHubsId){
-    let n = inHubsId.length;
-    for(let i = 0; i < n; i++){
-      let inHub = this.hubs[inHubsId[i]];
-      let outHub = this.hubs[outHubsId[i]];
-      let newFlow = new straightFlow(inHub, outHub)
-      this.flows.push(newFlow);
-      inHub.outFlow.push(newFlow);
-    }
-  }*/
-  // あの・・冗長にもほどがあるでよ・・・・辞書使えばいける？
-  registEasingFlow(inHubsId, outHubsId, easingId){
-    let n = inHubsId.length;
-    for(let i = 0; i < n; i++){
-      let inHub = this.hubs[inHubsId[i]];
-      let outHub = this.hubs[outHubsId[i]];
-      let newFlow = new easingFlow(inHub, outHub, easingId)
-      this.flows.push(newFlow);
-      inHub.outFlow.push(newFlow);
+    }else if(pr['type'] === 'factor'){
+      console.log("createFlow");
+      console.log(pr['factor']);
+      return new factorFlow(h1, h2, pr['factor']);
     }
   }
-  registCircleFlow(inHubsId, outHubsId, cxs, cys, radiuses, rad1s, rad2s){
-    let n = inHubsId.length;
-    for(let i = 0; i < n; i++){
-      let inHub = this.hubs[inHubsId[i]];
-      let outHub = this.hubs[outHubsId[i]];
-      let newFlow = new circleFlow(inHub, outHub, cxs[i], cys[i], radiuses[i], rad1s[i], rad2s[i])
-      this.flows.push(newFlow);
-      inHub.outFlow.push(newFlow);
-    }
-  }
-  registJumpFlow(inHubsId, outHubsId){
-    let n = inHubsId.length;
-    for(let i = 0; i < n; i++){
-      let inHub = this.hubs[inHubsId[i]];
-      let outHub = this.hubs[outHubsId[i]];
-      let newFlow = new jumpFlow(inHub, outHub)
-      this.flows.push(newFlow);
-      inHub.outFlow.push(newFlow);
-    }
-  }
+
   registActor(defaultHubsId, speeds, kinds){
     let n = defaultHubsId.length;
     for(let i = 0; i < n; i++){
@@ -381,25 +372,11 @@ class entity{
     }
   }
 }
-/*
+
 // そのうち登録・・なんだっけregist？registメソッド作って簡単にするから待ってて
-function createPattern0(){
-  let posX = [];
-  let posY = [];
-  for(let x1 = 0; x1 < 5; x1++){
-    for(let x2 = 0; x2 <= x1; x2++){
-      posX.push(200 - 30 * x1 + 60 * x2);
-      posY.push(100 + 30 * sqrt(3) * x1);
-    }
-  }
-  graph.registHub(posX, posY);
-  let inHubsId = [0, 1, 3, 6, 2, 4, 7, 5, 8, 9, 14, 9, 5, 2, 13, 8, 4, 12, 7, 11, 1, 3, 4, 6, 7, 8, 10, 11, 12, 13];
-  let outHubsId = [1, 3, 6, 10, 4, 7, 11, 8, 12, 13, 9, 5, 2, 0, 8, 4, 1, 7, 3, 6, 2, 4, 5, 7, 8, 9, 11, 12, 13, 14];
-  graph.registStraightFlow(inHubsId, outHubsId);
-  graph.registActor([0, 10, 14], [2, 2, 2], [0, 0, 0]);
-}*/
 
 function createPattern0(){
+  // 三角形パターン
   let posX = [];
   let posY = [];
   for(let x1 = 0; x1 < 5; x1++){
@@ -419,9 +396,11 @@ function createPattern0(){
 }
 
 function createPattern1(){
+  // 円形パターン
   let posX = [200].concat(arCosSeq(0, PI / 4, 8, 60, 200)).concat(arCosSeq(0, PI / 4, 8, 120, 200));
   let posY = [200].concat(arSinSeq(0, PI / 4, 8, 60, 200)).concat(arSinSeq(0, PI / 4, 8, 120, 200));
   graph.registHub(posX, posY);
+  // 初めの16個が直線で残りの16個が円軌道。
   let inHubsId = [0, 0, 0, 0, 9, 11, 13, 15, 2, 4, 6, 8, 2, 4, 6, 8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 16, 15, 14, 13, 12, 11, 10];
   let outHubsId = [1, 3, 5, 7, 1, 3, 5, 7, 0, 0, 0, 0, 10, 12, 14, 16, 2, 3, 4, 5, 6, 7, 8, 1, 16, 15, 14, 13, 12, 11, 10, 9];
   let params = [];
@@ -435,24 +414,46 @@ function createPattern1(){
   for(let i = 0; i < 16; i++){
     params[16 + i]['cx'] = cxs[i]; params[16 + i]['cy'] = cys[i]; params[16 + i]['radius'] = radiuses[i];
     params[16 + i]['rad1'] = rad1s[i]; params[16 + i]['rad2'] = rad2s[i];
-    console.log(params[16 + i]);
+    //console.log(params[16 + i]);
   }
   graph.registFlow(inHubsId, outHubsId, params);
   graph.registActor([0, 0, 0, 0], [2, 3, 2, 3], [1, 1, 1, 1]);
 }
 
 function createPattern2(){
+  // 正方形パターン
   for(let y = 0; y < 4; y++){
     for(let x = 0; x < 4; x++){
       graph.hubs.push(new hub(80 + x * 80, 80 + y * 80));
     }
   }
-  graph.registEasingFlow([1, 0, 8, 12, 14, 15, 7, 3], [0, 4, 12, 13, 15, 11, 3, 2], 0);
-  graph.registEasingFlow([1, 5, 8, 9, 14, 10, 7, 6], [5, 4, 9, 13, 10, 11, 6, 2], 1);
-  graph.registEasingFlow([4, 9, 13, 10, 11, 6, 2, 5], [8, 5, 14, 9, 7, 10, 1, 6], 2);
-  graph.registJumpFlow([1, 8, 14, 7], [8, 14, 7, 1]);
-  graph.registJumpFlow([4, 2, 11, 13], [2, 11, 13, 4]);
+  let params = [];
+  // easing / jump
+  for(let i = 0; i < 24; i++){ params.push({type:'easing', easingId: Math.floor(i / 8)}); }
+  let inHubsId = [1, 0, 8, 12, 14, 15, 7, 3, 1, 5, 8, 9, 14, 10, 7, 6, 4, 9, 13, 10, 11, 6, 2, 5];
+  let outHubsId = [0, 4, 12, 13, 15, 11, 3, 2, 5, 4, 9, 13, 10, 11, 6, 2, 8, 5, 14, 9, 7, 10, 1, 6];
+  for(let i = 0; i < 8; i++){ params.push({type:'jump'}); }
+  inHubsId = inHubsId.concat([1, 8, 14, 7, 4, 2, 11, 13]);
+  outHubsId = outHubsId.concat([8, 14, 7, 1, 2, 11, 13, 4]);
+  graph.registFlow(inHubsId, outHubsId, params);
   graph.registActor([0, 3, 15, 12], [2, 2, 3, 3], [2, 2, 2, 2]);
+}
+
+function createPattern3(){
+  // factorFlowの実験
+  let posX = [];
+  let posY = [];
+  for(let i = 0; i < 3; i++){
+    posX = posX.concat([220 - 60 * i, 340 - 60 * i, 300 - 60 * i, 180 - 60 * i, 140 - 60 * i, 380 - 60 * i]);
+    posY = posY.concat([40 + 120 * i, 40 + 120 * i, 120 + 120 * i, 120 + 120 * i, 120 + 120 * i, 40 + 120 * i]);
+  }
+  graph.registHub(posX, posY);
+  graph.registFlow([0, 1, 2, 3, 6, 7, 8, 9, 12, 13, 14, 15], [1, 2, 3, 0, 7, 8, 9, 6, 13, 14, 15, 12], typeSeq('straight', 12));
+  graph.registFlow([17, 11, 5], [10, 4, 16], typeSeq('jump', 3));
+  let params = typeSeq('factor', 12);
+  for(let i = 0; i < 6; i++){ params[i]['factor'] = 2; params[i + 6]['factor'] = 4; }
+  graph.registFlow([0, 3, 6, 9, 12, 15, 4, 1, 10, 7, 16, 13], [2, 1, 8, 7, 14, 13, 3, 5, 9, 11, 15, 17], params);
+  graph.registActor([4, 10, 16], [1, 2, 3], [3, 3, 3]);
 }
 
 // 配列関数
@@ -463,6 +464,13 @@ function constSeq(c, n){
   // cがn個。
   let array = [];
   for(let i = 0; i < n; i++){ array.push(c); }
+  return array;
+}
+
+function typeSeq(typename, n){
+  // typenameの辞書がn個。
+  let array = [];
+  for(let i = 0; i < n; i++){ array.push({type: typename}); }
   return array;
 }
 
