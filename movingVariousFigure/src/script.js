@@ -1,5 +1,8 @@
 // 具体化しようよ
 'use strict';
+// UIの詳細について
+// 左上にそれぞれの図形を拡大した形のアイコンを用意してそこをタッチして変えるように変更
+// quit/startボタンを追加して完成！！！！
 
 const HUB_RADIUS = 5;
 const PATTERN_NUM = 5;
@@ -48,30 +51,28 @@ function registActorGraphics(){
 
 // グラフィックの詳細
 function createActorGraphics(img, graphicsId){
-  if(graphicsId === 0){
+  if(graphicsId === 0){ // 普通の正方形
     img.fill(0, 0, 255);
     img.rect(3, 3, 14, 14);
-  }else if(graphicsId === 1){
+  }else if(graphicsId === 1){ // 三角形（火のイメージ）
     img.fill(255, 0, 0);
     img.triangle(10, 0, 10 + 5 * sqrt(3), 15, 10 - 5 * sqrt(3), 15);
-  }else if(graphicsId === 2){
+  }else if(graphicsId === 2){ // ダイヤ型（クリスタルのイメージ）（色合い工夫してもいいかも）
     img.fill(187, 102, 187);
     img.quad(10, 0, 10 + 10 / sqrt(3), 10, 10, 20, 10 - 10 / sqrt(3), 10);
-  }else if(graphicsId === 3){
+  }else if(graphicsId === 3){ // 手裏剣（忍者のイメージ）
     img.fill(0);
     img.quad(7, 6, 13, 0, 13, 14, 7, 20);
     img.quad(0, 7, 14, 7, 20, 13, 6, 13);
     img.fill(255);
     img.ellipse(10, 10, 5, 5);
-  }else if(graphicsId === 4){
+  }else if(graphicsId === 4){ // くさび型（草のイメージ・・くさびだけに（？）
     img.fill(32, 168, 72);
     img.quad(10, 2, 2, 18, 10, 10, 18, 18);
-  }else if(graphicsId === 5){
+  }else if(graphicsId === 5){ // 星型（オレンジの星）→イナヅマにしよう。それで完成とする。
     img.fill(244, 189, 0);
-    for(let i = 0; i < 5; i++){
-      img.triangle(10 - 10 * sin(2 * PI * i / 5), 10 - 10 * cos(2 * PI * i / 5), 10 - 5 * sin(2 * PI * i / 5 - PI / 10), 10 - 5 * cos(2 * PI * i / 5 - PI / 10), 10 - 5 * sin(2 * PI * i / 5 + PI / 10), 10 - 5 * cos(2 * PI * i / 5 + PI / 10));
-    }
-    img.ellipse(10, 10, 10, 10);
+    img.quad(10, 0, 12, 8, 8, 12, 4, 14);
+    img.quad(10, 20, 16, 6, 12, 8, 8, 12);
   }
 }
 
@@ -102,6 +103,16 @@ class counter{
 
 // stateからflowとhub作るの楽しいんだけど、
 // とりあえず具体化もうちょっとやってからでいいです。
+
+// hubはいろいろいじれる。
+// まず、effectが発生するようにできる（convertのタイミングでアクションを起こす）
+// デフォルトで何かactionって書いておいて派生形でactionだけいじるようにすれば何でもできるはず
+// flowも同様
+// 次に今ランダムで返してるところをinFlowに対して同じflowを返さないようにできる
+// これはflowにidを付けconvertでactorを取得してそのflowから同じflowかどうか判別して・・ってやると出来る
+// noBackHubみたいな
+// graphがglobalになってるから問い合わせてもいいけど直接渡した方が早そう
+
 class hub{
   // 結節点
   constructor(x, y){
