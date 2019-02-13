@@ -1,8 +1,5 @@
 // 具体化しようよ
 'use strict';
-// UIの詳細について
-// 左上にそれぞれの図形を拡大した形のアイコンを用意してそこをタッチして変えるように変更
-// quit/startボタンを追加して完成！！！！
 
 const HUB_RADIUS = 5;
 const PATTERN_NUM = 5;
@@ -134,12 +131,14 @@ class flow{
     this.from = h1; // 入口hub
     this.to = h2; // 出口hub
     this.span; // さしわたし
+    this.visible = true // これをfalseにすると描画の際に軌道が表示されない
   }
   // getter大事。これで取得することにより、オーバーライドするにあたって
   // 実際の値を変えずに返す値だけいじることができる。
   getSpan(){ return this.span; }
   calcPos(pos, cnt){}
   // あとはtoにconvertしてもらうだけ。
+  invisible(){ this.visible = false; }
   drawOrbit(gr){}
 }
 
@@ -153,6 +152,7 @@ class straightFlow extends flow{
     pos.y = map(cnt, 0, this.span, this.from.y, this.to.y);
   }
   drawOrbit(gr){
+    if(!this.visible){ return; }
     gr.push();
     gr.strokeWeight(1.0);
     gr.line(this.from.x, this.from.y, this.to.x, this.to.y);
@@ -272,6 +272,7 @@ class circleFlow extends flow{
     pos.y = this.cy + this.radius * sin(map(cnt, 0, this.span, this.rad1, this.rad2));
   }
   drawOrbit(gr){
+    if(!this.visible){ return; }
     let minRad = min(this.rad1, this.rad2);
     let maxRad = max(this.rad1, this.rad2);
     // 矢印描くところはメソッド化するべきかも。
@@ -374,6 +375,7 @@ class entity{
       this.baseGraph.ellipse(h.x, h.y, HUB_RADIUS * 2, HUB_RADIUS * 2); // ここをhubごとにdrawさせたい気持ちもある・・
     }, this)
     //console.log(3);
+    // 将来的にはここでは固定部分だけを描画して可変部分は毎フレーム描画みたいな感じにしたい。
   }
   switchPattern(){
     this.reset();
@@ -439,6 +441,8 @@ function createPattern0(){
   let outHubsId = [1, 3, 6, 10, 4, 7, 11, 8, 12, 13, 9, 5, 2, 0, 8, 4, 1, 7, 3, 6, 2, 4, 5, 7, 8, 9, 11, 12, 13, 14];
   graph.registFlow(inHubsId, outHubsId, typeSeq('straight', inHubsId.length));
   graph.registActor([0, 10, 14], [2, 2, 2], [0, 0, 0]);
+  // ちょっと実験
+  //graph.flows[8].invisible(); // 無事消えました！！！
 }
 
 function createPattern1(){
