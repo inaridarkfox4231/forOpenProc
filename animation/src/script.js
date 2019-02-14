@@ -1,30 +1,39 @@
 'use strict';
 // 加速バージョン
+// グラフィックの整理
+// リファクタリング
 
-const HUB_RADIUS = 5;
+const GRID_SIZE = 32;
 const dirName = ['right', 'down', 'left', 'up'];
+let playerImages = [];
 // hubに持たせる各方向のflow, というかpathのコードネームみたいなやつ
 
-let graph;
+let dangeonMap;
+
+function preload(){
+  for(let i = 0; i < 4; i++){ playerImages.push(loadImage("./assets/" + dirName[i] + "_0.png")); }
+  for(let i = 0; i < 4; i++){ playerImages.push(loadImage("./assets/" + dirName[i] + "_1.png")); }
+}
 
 function setup(){
-  createCanvas(400, 400);
-  graph = new entity();
-  createPattern();
-  graph.createGraph();
+  createCanvas(320, 320);
+  dangeonMap = new dangeon();
+  //createPattern();
+  createPattern2();
+  dangeonMap.createMap();
 }
 
 function draw(){
-  image(graph.baseGraph, 0, 0);
-  graph.actors.forEach(function(mf){
-    mf.update();
-    mf.display();
+  image(dangeonMap.baseMap, 0, 0);
+  dangeonMap.actors.forEach(function(a){
+    a.update();
+    a.display();
   })
 }
 
 // カウンターは使わないよ
 
-class hub{
+class corner{
   // 結節点
   constructor(x, y){
     this.x = x;
@@ -32,7 +41,7 @@ class hub{
     this.connected = {}; // つながってるflowを与える辞書
     this.flag = 0; // たとえば右と下に開いているなら0011とかそういうの
   }
-  registFlow(f, dirId){
+  registPath(f, dirId){
     this.connected[dirName[dirId]] = f;
     this.flag |= (1 << dirId);
   }
@@ -47,20 +56,20 @@ class hub{
   }
   calcPos(actor, moveDir){
     // keyStateに応じてあれを返す
-    let newFlow = this.connected[dirName[moveDir]];
-    actor.state = newFlow; // 隣接flowを返す
+    let newPath = this.connected[dirName[moveDir]];
+    actor.state = newPath; // 隣接flowを返す
     if(moveDir < 2){ actor.setDistance(0); }
-    else{ actor.setDistance(newFlow.span); }
+    else{ actor.setDistance(newPath.span); }
   }
 }
 
 function randomInt(n){ return Math.floor(random(n)); } // 0, 1, 2, ..., n-1 のどれかを返す汎用関数
 
-class flow{
+class path{
   // pathにしようかなぁ
   constructor(h1, h2){
-    this.luHub = h1; // 左、上
-    this.rdHub = h2; // 右、下
+    this.luCorner = h1; // 左、上
+    this.rdCorner = h2; // 右、下
     this.span = abs(h1.x - h2.x) + abs(h1.y - h2.y);
     this.type; // 0が左右、1が上下
     if(h1.y === h2.y){ this.type = 0; }else{ this.type = 1; }
@@ -78,7 +87,7 @@ class flow{
   }
   getSpan(){ return this.span; } // やっぱ必要かも
   getConnected(dirId){
-    if(dirId < 2){ return this.rdHub; }else{ return this.luHub; }
+    if(dirId < 2){ return this.rdCorner; }else{ return this.luCorner; }
   }
   calcPos(actor, moveDir){
     // flow内における位置の調整。カウントの増減で位置を制御する
@@ -86,21 +95,27 @@ class flow{
     else{ actor.distance -= actor.speed; }
     // 隣接ハブへの接続
     if(actor.distance < 0){
-      actor.state = this.luHub;
-      actor.pos.set(this.luHub.x, this.luHub.y);
+      actor.state = this.luCorner;
+      actor.pos.set(this.luCorner.x, this.luCorner.y);
     }else if(actor.distance > this.span){
-      actor.state = this.rdHub;
-      actor.pos.set(this.rdHub.x, this.rdHub.y);
+      actor.state = this.rdCorner;
+      actor.pos.set(this.rdCorner.x, this.rdCorner.y);
     }else{
       // ハブに到達しない時は普通に位置を更新する
-      actor.pos.set(map(actor.distance, 0, this.span, this.luHub.x, this.rdHub.x), map(actor.distance, 0, this.span, this.luHub.y, this.rdHub.y))
+      actor.pos.set(map(actor.distance, 0, this.span, this.luCorner.x, this.rdCorner.x), map(actor.distance, 0, this.span, this.luCorner.y, this.rdCorner.y))
     }
   }
   drawOrbit(gr){
     // 矢印もなくなる（行き来するので）
     gr.push();
-    gr.strokeWeight(1.0);
-    gr.line(this.luHub.x, this.luHub.y, this.rdHub.x, this.rdHub.y);
+    gr.fill(230);
+    gr.noStroke();
+    let x = this.luCorner.x - GRID_SIZE / 2;
+    let y = this.luCorner.y - GRID_SIZE / 2;
+    let w = this.rdCorner.x - this.luCorner.x + GRID_SIZE;
+    let h = this.rdCorner.y - this.luCorner.y + GRID_SIZE;
+    console.log("%d %d %d %d", x, y, w, h);
+    gr.rect(x, y, w, h);
     gr.pop();
   }
 }
@@ -118,6 +133,7 @@ class actor{
     this.visual = new figure(); // 表現
     this.distance = 0; // flowにいるときの位置計算用
     // 十字キーで操作できるように改良して。
+    this.direction = 0;
   }
   static getKeyState(){
     if(keyIsDown(RIGHT_ARROW)){ return 0; }
@@ -130,73 +146,77 @@ class actor{
   update(){
     let keyState = actor.getKeyState();
     if(keyState < 0){ this.speed = 0; return; }
-    //console.log("actor keyState %d", keyState);
+    // ここで向き補正
+    this.direction = keyState;
     let moveDirection = this.state.getDirection(keyState, this.distance);
     if(moveDirection < 0){ this.speed = 0; return; }
     this.speed = min(this.speed + 0.1, this.maxSpeed);
     this.state.calcPos(this, moveDirection);
   }
   display(){
-    this.visual.display(this.pos); // ここで描画
+    this.visual.display(this.pos, this.direction); // ここで描画
   }
 }
 
 class figure{
   constructor(){
-    this.rotation = random(2 * PI);
+    //this.rotation = random(2 * PI);
+    this.myFrame = 0;
   }
-  display(pos){
-    push();
-    translate(pos.x, pos.y);
-    this.rotation += 0.1;
-    rotate(this.rotation);
-    rect(-10, -10, 20, 20);
-    pop();
+  display(pos, dirId){
+    this.myFrame = (this.myFrame + 1) % 60;
+    let x = pos.x - 14;
+    let y = pos.y - 14;
+    let kind = Math.floor(this.myFrame / 30) * 4;
+    image(playerImages[dirId + kind], x, y);
   }
 }
 
-class entity{
+class dangeon{
   constructor(){
-    this.hubs = [];
-    this.flows = [];
+    this.corners = [];
+    this.paths = [];
     this.actors = [];
-    this.baseGraph = createGraphics(width, height);
+    this.baseMap = createGraphics(width, height);
   }
-  createGraph(){
-    this.baseGraph.background(230);
-    this.flows.forEach(function(f){
-      f.drawOrbit(this.baseGraph);
-    }, this)
-    this.hubs.forEach(function(h){
-      this.baseGraph.ellipse(h.x, h.y, HUB_RADIUS * 2, HUB_RADIUS * 2); // ここをhubごとにdrawさせたい気持ちもある・・
+  createMap(){
+    this.baseMap.background(130);
+    this.paths.forEach(function(f){
+      f.drawOrbit(this.baseMap);
     }, this)
     // 将来的にはここでは固定部分だけを描画して可変部分は毎フレーム描画みたいな感じにしたい。
   }
-  registHub(posX, posY){
+  registCorner(posX, posY){
     let n = posX.length;
-    for(let i = 0; i < n; i++){ this.hubs.push(new hub(posX[i], posY[i])); }
+    for(let i = 0; i < n; i++){ this.corners.push(new corner(16 + 32 * posX[i], 16 + 32 * posY[i])); }
   }
-  registFlow(inHubsId, outHubsId){
-    let n = inHubsId.length;
+  registPath(luCornersId, rdCornersId){
+    let n = luCornersId.length;
     for(let i = 0; i < n; i++){
-      let inHub = this.hubs[inHubsId[i]];
-      let outHub = this.hubs[outHubsId[i]];
-      let newFlow = new flow(inHub, outHub);
-      this.flows.push(newFlow);
-      if(newFlow.type === 0){ inHub.registFlow(newFlow, 0); outHub.registFlow(newFlow, 2); }
-      else{ inHub.registFlow(newFlow, 1); outHub.registFlow(newFlow, 3); }
+      let luCorner = this.corners[luCornersId[i]];
+      let rdCorner = this.corners[rdCornersId[i]];
+      let newPath = new path(luCorner, rdCorner);
+      this.paths.push(newPath);
+      if(newPath.type === 0){ luCorner.registPath(newPath, 0); rdCorner.registPath(newPath, 2); }
+      else{ luCorner.registPath(newPath, 1); rdCorner.registPath(newPath, 3); }
     }
   }
 }
-
 function createPattern(){
-  // 格子パターン
-  let posX = [100, 100, 100, 200, 200, 200, 300, 300, 300];
-  let posY = [100, 200, 300, 100, 200, 300, 100, 200, 300];
-  graph.registHub(posX, posY);
-  let inHubsId = [0, 1, 2, 3, 4, 5, 0, 3, 6, 1, 4, 7]; // 左上から右下になるように設定する(でないとエラー発生)
-  let outHubsId = [3, 4, 5, 6, 7, 8, 1, 4, 7, 2, 5, 8];
-  graph.registFlow(inHubsId, outHubsId);
-  graph.actors.push(new actor(graph.hubs[0], 3));
-  // ちょっと実験
+  let posX = [1, 3, 1, 3];
+  let posY = [1, 1, 3, 3];
+  dangeonMap.registCorner(posX, posY);
+  let luCornersId = [0, 0, 1, 2];
+  let rdCornersId = [1, 2, 3, 3];
+  dangeonMap.registPath(luCornersId, rdCornersId);
+  dangeonMap.actors.push(new actor(dangeonMap.corners[0], 3));
+}
+function createPattern2(){
+  let posX = [1, 1, 1, 3, 3, 3, 5, 5, 5, 8, 8, 8];
+  let posY = [1, 5, 8, 3, 5, 8, 3, 5, 8, 1, 5, 8];
+  dangeonMap.registCorner(posX, posY);
+  let lus = [0, 9, 6, 1, 4, 7, 10, 0, 3, 1, 4, 7, 2, 5, 8];
+  let rds = [1, 10, 7, 2, 5, 8, 11, 9, 6, 4, 7, 10, 5, 8, 11];
+  dangeonMap.registPath(lus, rds);
+  dangeonMap.actors.push(new actor(dangeonMap.corners[0], 3));
 }
