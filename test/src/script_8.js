@@ -23,8 +23,8 @@ function draw(){
   background(220);
   translate(200, 200);
   t++;
-  let x = 430 / (2 * t);
+  let x = 270 / (2 * t);
   applyMatrix(sin(PI * x), 0, 0, 1, 0, 0);
-  if(Math.floor(x) % 2 === 1){ image(grs[0], -20, -20); }else{ image(grs[1], -20, -20); } // 灰色から青に変わる
-  if(t >= 430){ noLoop(); }
+  if(Math.floor(x) % 2 === 1){ image(grs[0], -20, -20); }else{ image(grs[1], -20, -20); } // img1→img2と変化
+  if(t >= 270){ noLoop(); }
 }
