@@ -1,71 +1,58 @@
-// 仕様
-// まあ、あれはまた今度考えるということで・・・・・・・・
-// タイルを100枚用意する。20×20のサイズで横に10枚、縦に10枚、合計100枚。
-// ふるいのアルゴリズムを毎フレーム行う
-// 予め素数として確認されたタイルのidとはがすタイルのidを格納する配列を作っておき
-// アルゴリズムの際にそこにそれを放り込んでいく
-// そして毎フレームその配列が空でない限り1枚ずつ確定(confirm), または不適当(fall)の処理を行う
-// ふるいのアルゴリズムの方が先に終了するので
-// 以降はタイルをはがしたり確定させるだけ
-// shiftが使えそう
-// 剥がしたタイルは配列からも・・消さなくていい。そのまま。
-// 参照するのがめんどくさい。どっちがいいかな・・
-
+// エラトステネスのふるいを可視化したい
 'use strict';
-
-let all;
+let tileGraphics = [];
 
 function setup(){
-  createCanvas(200, 200);
-  all = new entity(100);
-  all.set();
-  noLoop();
+  createCanvas(400, 400);
+  loadTileGraphics();
 }
 
 function draw(){
   background(220);
-  all.draw();
+}
+
+function loadTileGraphics(){
+  let aroundColors = [color(195), color(244, 125, 132), color(148, 154, 226)];
+  let bodyColors = [color(127), color(237, 28, 36), color(63, 72, 204)];
+  for(let i = 0; i < 3; i++){
+    let img = createGraphics(20, 20);
+    img.background(aroundColors[i]);
+    img.noStroke();
+    img.fill(bodyColors[i]);
+    img.rect(1, 1, 18, 18);
+    img.stroke(255);
+    img.line(17, 2, 17, 2);
+    img.line(17, 4, 17, 10);
+    tileGraphics.push(img);
+  }
 }
 
 class tile{
-  constructor(n){ // n:1~100
-    this.id = n;
-    this.pos = createVector(20 * ((n - 1) % 10), 20 * Math.floor((n - 1) / 10));
-    this.visual = new figure();
+  constructor(n){
+    // nは1～400で、それに相当するタイルを・・
+    this.x = (n % 20) * 20;
+    this.y = Math.floor(n / 20);
+    this.grId = 0; // はいいろ
+    this.state = spin; // スピンしながら登場
+    this.myCounter = new counter(); // 動画用
   }
-  set(){
-    this.visual.set();
+  update(){
+
   }
   draw(){
-    image(this.visual.graphic, this.pos.x + 1, this.pos.y + 1);
+    image(tileGraphics[this.grId], this.x, this.y); // 常にこれ実行する感じ
   }
 }
 
-// tileがはがれて落ちるところを実装したい
-
-class figure{
+class spinFlow{
   constructor(){
-    this.graphic = createGraphics(18, 18);
+    
   }
-  set(){
-    this.graphic.fill(220);
-    this.graphic.rect(0, 0, 18, 18);
-  }
-  changeColor(newColor){
-    this.graphic.clear();
-    this.graphic.fill(newColor);
-    this.graphic.rect(0, 0, 18, 18);
+  action(cnt, grId){
+
   }
 }
 
-// entityがエラトステネスやったりタイルを落としたりする
-class entity{
-  constructor(size){
-    this.tiles = [];
-    for(let n = 1; n <= size; n++){ this.tiles.push(new tile(n)); }
-    this.confirmed_tiles = []; // 確定させるタイル
-    this.incorrect_tiles = []; // 剥がすタイル
-  }
-  set(){ this.tiles.forEach(function(t){ t.set(); }) }
-  draw(){ this.tiles.forEach(function(t){ t.draw(); }) }
+class fallFlow{
+
 }

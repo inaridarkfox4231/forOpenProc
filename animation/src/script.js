@@ -176,7 +176,7 @@ class dangeon{
   constructor(){
     this.corners = [];
     this.paths = [];
-    this.actors = [];
+    this.actors = []; // actorsは敵キャラも含めて別のまとまりに持たせた方がいいかも。interaction考えると。
     this.baseMap = createGraphics(width, height);
   }
   createMap(){
