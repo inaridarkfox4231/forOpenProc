@@ -26,5 +26,5 @@ function draw(){
   let x = 270 / (2 * t);
   applyMatrix(sin(PI * x), 0, 0, 1, 0, 0);
   if(Math.floor(x) % 2 === 1){ image(grs[0], -20, -20); }else{ image(grs[1], -20, -20); } // img1→img2と変化
-  if(t >= 270){ noLoop(); }
+  if(t >= 54){ noLoop(); }
 }
