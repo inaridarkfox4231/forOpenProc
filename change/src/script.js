@@ -1,18 +1,10 @@
 // intersectionのchange.
-// はやくはじめよー。なんかマンネリって思われてそう。
-// 実現する時間がないってだけでちゃんと考えてるのに
-
-// intersectionをとりあえずEnterキーで切り替えられるように
-// あとhubとflowを同じように取り扱えるように
-// そんな感じかな・・
 
 let all;
-//let deco;
 
 function setup(){
   createCanvas(400, 400);
   all = new entity();
-  //deco = new decoration();
   all.initialize();
 }
 
@@ -22,6 +14,7 @@ function draw(){
   all.display();
 }
 
+// デバッグ用
 function keyTyped(){
   if(key === 'p'){ noLoop(); }
   if(key === 'q'){ loop(); }
@@ -33,157 +26,144 @@ class counter{
     this.cnt = 0;
     this.limit;
     this.isOn;
-    this.diff;
+    this.diff; // これ要るかな・・カウントの進め方をカスタマイズできるようにすれば要らないかも
   }
   getCnt(){ return this.cnt; }
   getState(){ return this.isOn; }
   setting(lim, diff){
-    this.cnt = 0;  // ああーーーーーーわすれてた
+    this.cnt = 0;
     this.limit = lim;
     this.diff = diff;
     this.isOn = true; // スイッチオン
   }
   step(){
     this.cnt += this.diff;
-    //console.log("timer?");
-    //console.log(this.cnt > this.limit);
     if(this.cnt > this.limit){ this.isOn = false; }
   }
   pause(){ this.isOn = !this.isOn; } // ポーズ要るかどうか
 }
 
-// hubはflowとflowをつなぐ。
-class hub{
-  constructor(x, y){
-    this.x = x;
-    this.y = y;
-    this.outFlow = [];
-    this.isConvertible = false;
-  }
-  getState(){ return this.isConvertible; }
-  registFlow(f){
-    this.outFlow.push(f);
-    this.isConvertible = true; // flowが登録されればtrueになるけど
-  }
-  initialize(_actor){} // 何か一回だけやって終わりの場合はここに書くかもね
-  execute(_actor){} // ここで何かすることもあるでしょう
-  convert(_actor){} // まあ、どうしますかね
-  display(gr){
-    gr.push();
-    gr.translate(this.x, this.y);
-    gr.ellipse(0, 0, 10, 10); // hubをあらわす丸い点。
-    gr.pop();
-  }
-}
-
-class randomHub extends hub{
-  constructor(x, y){
-    super(x, y);
-  }
-  convert(_actor){
-    let n = this.outFlow.length;
-    _actor.state = this.outFlow[randomInt(n)];
-  }
-}
-
+// 全部フロー。convertはallの仕事。hubは廃止。
 class flow{
-  constructor(h1, h2){
-    this.from = h1;
-    this.to = h2;
-    this.span;
-    this.isConvertible = true; // うんまぁそうでしょうね
-    // 行先が一時的になくなったらfalseもありえる・・というか保留中？
-    // で、正式に決定したらtrueに戻す的な
-    // 多分線分みたいなのが上行ったりした行ったりするエレベータみたいなの想定してる（？）
+  constructor(){
+    this.index = flow.index++;
+    this.convertible = false; // デフォルト（convertできるところだけtrueにする）
+    this.params = {}; // convertに使うパラメータ（たとえば'simple'とか'random'とか指定）
   }
-  registInHub(h){ this.from = h; }
-  registOutHub(h){ this.to = h; this.isConvertible = true; }
-  getState(){ return this.isConvertible; }
+  isConvertible(){ return this.convertible; }
+  initialize(_actor){} // プロセス開始時の処理。たとえばstraightFlowならtimerのsettingとか
+  // default(){} // どこにも行けない時の処理を書くかもしれない
+  execute(_actor){}
+  complete(_actor){} // プロセス終了時の処理。たとえば_actor.kill()でここで終わったりとかね
+  // paramsに何か入れるときはここ↑に書いてください。params['id'] = '_actorの色のid' とか。
+  convert(_actor){
+    let nextFlow = all.getNextFlow(this.index, this.params); // paramsから次のFlowを取得
+    _actor.state = nextFlow;
+  } // allに頼んで次のflowを設定してもらう
+  display(gr){} // line型なら線、hub型ならボックスとかそういうのを描画する用。
+}
+
+// 始点と終点とspanからなりどこかからどこかへ行くことが目的のFlow.
+class orbitalFlow extends flow{
+  constructor(from, to){
+    super();
+    this.from = from; // スタートの位置ベクトル
+    this.to = to; // ゴールの位置ベクトル
+    this.span;
+  }
   getSpan(){ return this.span; }
   initialize(_actor){
-    _actor.timer.setting(this.getSpan(), _actor.speed);
-    _actor.isActive = true;
+    _actor.pos.set(this.from.x, this.from.y);
+    _actor.timer.setting(this.span, _actor.speed);
   }
-  execute(_actor){} // 位置をいじるんじゃない（適当）
-  convert(_actor){
-    _actor.state = this.to;
-  } // どうするの？
-  display(gr){}
 }
 
-class straightFlow extends flow{
-  constructor(h1, h2, factor){
-    // factorはstraightFlowのデフォルトにする
-    super(h1, h2);
-    this.span = Math.sqrt(pow(h2.x - h1.x, 2) + pow(h2.y - h1.y, 2))
-    this.speedFactor = factor; // たとえば2なら2倍速
+class straightFlow extends orbitalFlow{
+  constructor(from, to, factor){
+    super(from, to);
+    this.span = p5.Vector.dist(from, to);
+    this.factor = factor; // 2なら2倍速とかそういう。
   }
-  getSpan(){ return this.span / this.speedFactor; }
+  getSpan(){
+    return this.span / this.factor;
+  }
   execute(_actor){
     // ストレートフロー
-    if(!_actor.timer.getState()){ return; }
+    if(!_actor.timer.getState()){ return; } // 車の一時停止とかに使えそう
     _actor.timer.step();
+    //console.log(_actor.pos);
     let cnt = _actor.timer.getCnt();
-    _actor.pos.x = map(cnt, 0, this.span / this.speedFactor, this.from.x, this.to.x);
-    _actor.pos.y = map(cnt, 0, this.span / this.speedFactor, this.from.y, this.to.y);
+    _actor.pos.x = map(cnt, 0, this.span / this.factor, this.from.x, this.to.x);
+    _actor.pos.y = map(cnt, 0, this.span / this.factor, this.from.y, this.to.y);
     if(!_actor.timer.getState()){ _actor.isActive = false; } // タイマーが切れたらnon-Activeにする
   }
   display(gr){
+    // 線を引くだけです
     gr.push();
     gr.strokeWeight(1.0);
     gr.line(this.from.x, this.from.y, this.to.x, this.to.y);
+    gr.translate(this.from.x, this.from.y); // 矢印の根元に行って
+    let directionVector = createVector(this.to.x - this.from.x, this.to.y - this.from.y);
+    gr.rotate(directionVector.heading()); // ぐるんってやって行先をx軸正方向に置いて
+    let arrowSize = 7;
+    gr.translate(this.span - arrowSize, 0);
+    gr.fill(0);
+    gr.triangle(0, arrowSize / 2, 0, -arrowSize / 2, arrowSize, 0);
     gr.pop();
   }
 }
+// とりあえずこれしか使ってないですね・・あのプログラムでは。というか基本的に。
+// それこそ色に応じてオブジェクトをえり分けるとかそういうことをやってないですから。今のところは。
+// たとえばgenerateHubとかこの後定義するけどね。
+
+flow.index = 0; // convertに使うflowの連番
 
 class actor{
-  // とりあえずハブにしか置かないから
-  constructor(h, speed = 1, kind = 0){
-    this.state = h;
-    this.pos = createVector(h.x, h.y);
+  constructor(f, speed = 1, kind = 0){
+    this.index = actor.index++;
+    this.state = f;
+    this.pos = createVector(0, 0); // flowが始まれば勝手に・・って感じ。
     this.visual = new rollingFigure(kind); // 回転する図形
     this.timer = new counter(); // タイマーとしての役割を果たすカウンター、くらいの意味
     this.speed = speed; // 今の状況だとスピードも要るかな・・クラスとして分離するかは要相談（composition）
-    this.isActive = false; //stateにおける処理が実行中かどうかをあらわす。何もしない時はfalseのまま。
+    this.isActive = true; // stateにおける処理が実行中かどうかをあらわす。何もしない時はfalseのまま。
+    this.state.initialize(this); // これ、忘れてた。
+  }
+  convert(){
+    this.state.convert(this);
+    // 上記のconvertでstateが変わっているため上と下でthis.stateの内容が異なる。
+    this.state.initialize(this);
+    this.isActive = true;
   }
   update(){
-    if(!this.isActive){
-      //console.log("first convert");
-      if(this.state.getState()){
-        //console.log(this.state);
-        this.state.convert(this);
-        // 上記のconvertでstateが変わっているため上と下でthis.stateの内容が異なる。
-        //console.log(this);
-        //console.log(this.state);
-        this.state.initialize(this);
-      }
+    if(!this.isActive && this.state.isConvertible()){
+      this.convert();
     }
-    // はじめにnon-Activeの処理を書いてそのあとすぐActiveの処理を書くと、
-    // non-Activeの中でActiveになった時にそのまま処理を行ってくれる。
-    // これにより従来のようなflow-hub-flowシステムが実現するのかなぁ（おい）
+    // flow-hub-flowはもうなくなったよ。
     if(this.isActive){
       this.state.execute(this); // 処理の本体（timerOffは多分この中でやるんだろう）
-      //console.log(this.isActive);
+      // executeの結果non-Activeになったらcomplete処理をする
       if(!this.isActive){
-        this.isActive = false;
-        //console.log("start debug");
-        //console.log(this.state);
-        this.state.convert(this);
-        //console.log(this.state);
-        //console.log("end debug");
-        // 上と下でthis.stateの内容が違う
-        this.state.initialize(this);
-        // オプションです。hubがactiveを使うかどうかはhubの性質に委ねます。
-        // 基本convertには何も書いてない。だからActiveにならず、上に戻り、それでもし行先がないなら
-        // getStateでfalseが返され「停滞」する。何かしらのアクションでgetStateがtrueになったときに
-        // convertされて物語が進む（かも）。
+        this.state.complete(this)
+        // その時点でconvert出来ない時は最初に戻る。convert出来るようになるまで停滞する。
+        if(this.state.isConvertible()){ this.convert(); }
       }
     }
   }
   display(){
     this.visual.display(this.pos);
   }
+  kill(){
+    // 自分を排除する
+    let selfId;
+    for(selfId = 0; selfId < all.actors.length; selfId++){
+      if(all.actors[selfId].id === this.index){ break; }
+    }
+    all.actors.splice(selfId, 1);
+  }
 }
+
+actor.index = 0; // 0, 1, 2, 3, ....
 
 // figureクラスは図形の管理を行う
 // やることは図形を表示させること、回転はオプションかな・・
@@ -221,28 +201,56 @@ class entity{
   constructor(){
     this.mainGraph = new graph();
     this.subGraph = new graph();
+    this.mainFlowNum = 0; // mainGraphのFlowの総数
+    this.convertList = []; // convertに使う配列の配列. 通し番号で入ってる。
     this.actors = [];
   }
+  // よく考えたらmainもsubもこっちにあるわけで。mainとsubの初期状態での連携もあるのに、
+  // 接続を個々のグラフにやらせるのはそもそも不可能な話だった。なので、こっちで構成します。
+  // ていうかたとえば「mainのhub」→「subのhub」ってflowはどこに所属するのよ・・・・
+  // 結論：hubもflowも独立に構成する。連携（composition）はなし。
+  // convertの情報はentityか他の何かしらの統合体が統一的に取り扱い、そこから命令を下す。できるの？？
+
+  // 衝撃の事実・・flowとhubの区別はしなくていいらしい。
+  // じゃああれ実は全部flowだけで書ける、言われてみれば当たり前か。
   initialize(){
     // ロード！
     createPattern(); // グローバル・・
+    //console.log(this.mainGraph.flows);
     this.createGraph();
   }
   createGraph(){
     this.mainGraph.createVisual();
     this.subGraph.createVisual();
   }
+  getFlow(index){ // 通し番号からflowを取得
+    // 番号はmain→subの順につけるのよー
+    //console.log("getFlow");
+    //console.log(this.mainGraph.flows);
+    if(index < this.mainFlowNum){ return this.mainGraph.flows[index]; }
+    return this.subGraph.flows[index - this.mainFlowNum];
+  }
   reset(){
     this.mainGraph.reset();
     this.subGraph.reset();
     this.actors = [];
   }
-  registActor(defaultHubsIds, speeds, kinds){
-    // 基本的にメイングラフにしかアクターを設置しないことにする
-    for(let i = 0; i < defaultHubsIds.length; i++){
-      let h = this.mainGraph.hubs[defaultHubsIds[i]];
-      //console.log("first registActor");
-      this.actors.push(new actor(h, speeds[i], kinds[i]));
+  getNextFlow(index, params){
+    let nextFlowIndex;
+    let indexList = this.convertList[index];
+    if(params['type'] === 'random'){ nextFlowIndex = indexList[randomInt(indexList.length)]; }
+    else if(params['type'] === 'simple'){ nextFlowIndex = indexList[0]; }
+    else if(params['type'] === 'direct'){ nextFlowIndex = indexList[params['id']];
+    }
+    return this.getFlow(nextFlowIndex);
+  }
+  registActor(flowIds, speeds, kinds){
+    // flowはメソッドでidから取得。
+    for(let i = 0; i < flowIds.length; i++){
+      let f = this.getFlow(flowIds[i]);
+      //console.log('registActor');
+      //console.log(f);
+      this.actors.push(new actor(f, speeds[i], kinds[i]));
     }
   }
   update(){
@@ -254,7 +262,6 @@ class entity{
     image(this.mainGraph.visual, 0, 0);
     image(this.subGraph.visual, 0, 0);
     this.actors.forEach(function(_actor){
-      //console.log("firstdisplay");
       _actor.display();
     })
   }
@@ -263,38 +270,30 @@ class entity{
 class graph{
   // グラフクラス
   constructor(){
-    this.hubs = [];
     this.flows = [];
     this.visual = createGraphics(width, height);
   }
   reset(){
-    this.hubs = [];
     this.flows = [];
     this.visual.clear();
   }
+  // subGraphの書き換えはここで。
   createVisual(){
     // たとえばsubGraphで位置情報が更新されるたびにここを・・
     this.flows.forEach(function(f){ f.display(this.visual); }, this);
-    this.hubs.forEach(function(h){ h.display(this.visual); }, this);
   }
-  registHub(posX, posY){
-    for(let i = 0; i < posX.length; i++){
-      this.hubs.push(new randomHub(posX[i], posY[i]));
-    }
-  }
-  registFlow(inHubsId, outHubsId, paramSet){
+  // flowを作るときにhubを使わなきゃいいのよね
+  registFlow(paramSet){
     // paramSetはパラメータの辞書(params)の配列
-    for(let i = 0; i < inHubsId.length; i++){
-      let inHub = this.hubs[inHubsId[i]];
-      let outHub = this.hubs[outHubsId[i]];
-      let newFlow = graph.createFlow(inHub, outHub, paramSet[i]);
+    paramSet.forEach(function(params){
+      let newFlow = graph.createFlow(params);
+      //console.log(newFlow);
       this.flows.push(newFlow);
-      inHub.registFlow(newFlow);
-    }
+    }, this);
   }
-  static createFlow(inHub, outHub, params){
+  static createFlow(params){
     if(params['type'] === 'straight'){
-      return new straightFlow(inHub, outHub, params['factor']);
+      return new straightFlow(params['from'], params['to'], params['factor']);
     }
   }
 }
@@ -308,26 +307,46 @@ function inputGraphic(gr, kind){
   }
 }
 
+// ここでmain→subの順にregistすればOK
 function createPattern(){
   let posX = [100, 300, 300, 100];
   let posY = [100, 100, 300, 300];
-  all.mainGraph.registHub(posX, posY);
-  let paramSet = [];
-  for(let i = 0; i < 3; i++){ paramSet.push({type:'straight', factor:1}); }
-  all.mainGraph.registFlow([0, 1, 2], [1, 2, 3], paramSet);
+  let vecs = getVectors(posX, posY);
+  let paramSet = getOrbitalFlows(vecs, [0, 1, 2], [1, 2, 3], 'straight');
+  paramSet.forEach(function(params){ params['factor'] = 1; });
+  // mainとsubへの振り分け
+  all.mainGraph.registFlow(paramSet);
+  all.mainFlowNum = all.mainGraph.flows.length; // mainGraphのflowの数はここで計算する
+  // パターンで指定することが増えたね。
+  // 1. convertListの初期設定
+  // 2. convert typeの設定、convert可能性の初期設定（たとえば行き止まりには指定しない）
+  all.convertList = [[1], [2], []];
+  let mainFlows = all.mainGraph.flows;
+  //console.log(all.mainGraph.flows);
+  for(let i = 0; i < 2; i++){ mainFlows[i].params['type'] = 'simple'; mainFlows[i].convertible = true; }
   all.registActor([0], [2], [0]);
 }
-
-/*
-// 画像やエフェクトなどの構成を一括して行う（かも）
-class decoration{
-  constructor(){
-    // 色とか
-  }
-}*/
 
 // utility.
 function randomInt(n){
   // 0, 1, ..., n-1のどれかを返す
   return Math.floor(random(n));
+}
+
+function getVectors(posX, posY){
+  let vecs = [];
+  for(let i = 0; i < posX.length; i++){
+    vecs.push(createVector(posX[i], posY[i]));
+  }
+  return vecs;
+}
+
+// OrbitalFlow用の辞書作るよー
+function getOrbitalFlows(vecs, fromIds, toIds, typename){
+  let paramSet = [];
+  for(let i = 0; i < fromIds.length; i++){
+    let dict = {type: typename, from: vecs[fromIds[i]], to: vecs[toIds[i]]};
+    paramSet.push(dict);
+  }
+  return paramSet;
 }
