@@ -3,6 +3,12 @@
 // グラフィックの整理
 // リファクタリング
 
+// 近いうちに位置情報をhubとflowに持たせるように・・
+// corner→spotの方がよさそう。敵の動きとかに使うhubと区別。
+// pathはいいけど・・で、roomを作りたいのね。大部屋。
+// とりあえずギミックは階段作りたいです。別マップにワープするやつ。
+// 32x32のうち中央の16x16くらいに中心が来たら発動する感じで。spotにイベントを仕掛けて。
+
 const GRID_SIZE = 32;
 const dirName = ['right', 'down', 'left', 'up'];
 let playerImages = [];
@@ -77,7 +83,8 @@ class path{
   getDirection(keyState, dist){
     // 通路に平行
     if(this.type === (keyState % 2)){ return keyState; }
-    // 通路に垂直、ハブの近く
+    // 通路に垂直、ハブの近くでは方向の補正がかかる。いわゆる「あそび」。がっちりだと通路に入れないので。
+    // 多分、同じ手法で大部屋（広い部屋）でも出来るようになるはず。
     if(dist < 16){
       if(this.type === 0){ return 2; }else{ return 3; }
     }else if(this.span - dist < 16){

@@ -42,20 +42,27 @@ function registActorGraphics(){
 class actor{
   constructor(x, y, index){
     this.pos = createVector(x, y);
-    this.posArray = [];
+    this.posArray = []; // ブリンク表示用
     for(let i = 0; i < 11; i++){ this.posArray.push(createVector(x, y)); }
+    // visualをブリンクを含む配列にする
     this.visual = [new figure(index), new figure(index + GRAPHICS_NUM), new figure(index + 2 * GRAPHICS_NUM)];
+    for(let i = 0; i < 3; i++){ // 回転パターンを揃える
+      this.visual[1].rotation = this.visual[0].rotation;
+      this.visual[2].rotation = this.visual[0].rotation;
+    }
     this.moving = true;
   }
   update(){
     if(!this.moving){ return; }
     this.pos.x += 1;
     this.pos.y = this.pos.x + 20 * sin(this.pos.x * 2 * PI / 60);
+    // posArrayの更新
     this.posArray.shift();
     this.posArray.push(createVector(this.pos.x, this.pos.y));
     if(this.pos.x > 500){ this.quit(); }
   }
   display(){
+    // ブリンクもまとめて表示
     this.visual[0].display(this.pos);
     this.visual[1].display(this.posArray[5]);
     this.visual[2].display(this.posArray[0]);
@@ -113,12 +120,8 @@ class selectUI{
     this.state = 4; // 0~6
     this.count = 0;
     this.figures = [];
-    for(let i = 0; i < GRAPHICS_NUM * 3; i++){
+    for(let i = 0; i < GRAPHICS_NUM * 3; i++){ // ブリンク画像を追加
       this.figures.push(new figure(i));
-    }
-    for(let i = 0; i < GRAPHICS_NUM; i++){
-      this.figures[i + GRAPHICS_NUM].rotation = this.figures[i].rotation;
-      this.figures[i + 2 * GRAPHICS_NUM].rotation = this.figures[i].rotation;
     }
   }
   display(){
