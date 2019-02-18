@@ -5,7 +5,7 @@
 // intersectionをとりあえずEnterキーで切り替えられるように
 // あとhubとflowを同じように取り扱えるように
 // そんな感じかな・・
-
+'use strict';
 let all;
 //let deco;
 

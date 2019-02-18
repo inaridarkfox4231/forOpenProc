@@ -1,6 +1,7 @@
-// intersectionのchange.
+// flowベースでの書き換えをする実験～～
+
 'use strict';
-let all;
+let all; // 全体
 
 function setup(){
   createCanvas(400, 400);
@@ -48,16 +49,20 @@ class flow{
   constructor(){
     this.index = flow.index++;
     this.convertible = false; // デフォルト（convertできるところだけtrueにする）
-    this.params = {}; // convertに使うパラメータ（たとえば'simple'とか'random'とか指定）
+    //this.params = {}; // convertに使うパラメータ（たとえば'simple'とか'random'とか指定）
+    // paramsを廃止してみる
+    this.initialFunc = triv;
+    this.completeFunc = triv;
+    this.convertFunc = triv;  // え？？
   }
   isConvertible(){ return this.convertible; }
-  initialize(_actor){} // プロセス開始時の処理。たとえばstraightFlowならtimerのsettingとか
+  initialize(_actor){ this.initialFunc(this, _actor); } // プロセス開始時の処理。たとえばstraightFlowならtimerのsettingとか
   // default(){} // どこにも行けない時の処理を書くかもしれない
-  execute(_actor){}
-  complete(_actor){} // プロセス終了時の処理。たとえば_actor.kill()でここで終わったりとかね
+  execute(_actor){} // 処理の本体
+  complete(_actor){ this.completeFunc(this, _actor); } // プロセス終了時の処理。たとえば_actor.kill()でここで終わったりとか
   // paramsに何か入れるときはここ↑に書いてください。params['id'] = '_actorの色のid' とか。
   convert(_actor){
-    let nextFlow = all.getNextFlow(this.index, this.params); // paramsから次のFlowを取得
+    let nextFlow = all.getNextFlow(this.index, this.convertFunc(this, _actor));
     _actor.state = nextFlow;
   } // allに頼んで次のflowを設定してもらう
   display(gr){} // line型なら線、hub型ならボックスとかそういうのを描画する用。
@@ -73,6 +78,7 @@ class orbitalFlow extends flow{
   }
   getSpan(){ return this.span; }
   initialize(_actor){
+    this.initialFunc(this, _actor)
     _actor.pos.set(this.from.x, this.from.y);
     _actor.timer.setting(this.span, _actor.speed);
   }
@@ -137,6 +143,7 @@ class actor{
   }
   update(){
     if(!this.isActive && this.state.isConvertible()){
+      // default実装するなら、Activeじゃない（処理は終わった）けど待機中ってときに暇つぶしでって感じになりそう
       this.convert();
     }
     // flow-hub-flowはもうなくなったよ。
@@ -170,6 +177,7 @@ actor.index = 0; // 0, 1, 2, 3, ....
 // たとえばアイテムとか、オブジェクト的な奴とか。回転しないことも考慮しないとなぁ。
 class figure{
   constructor(kind){
+    this.kind = kind; // 0~6の値
     this.graphic = createGraphics(20, 20);
     inputGraphic(this.graphic, kind);
   }
@@ -197,52 +205,40 @@ class rollingFigure extends figure{
   }
 }
 
+// めんどくさいのでさらに書き換え。graphクラスは廃止。flowすべて持たせて。
 class entity{
   constructor(){
-    this.mainGraph = new graph();
-    this.subGraph = new graph();
-    this.mainFlowNum = 0; // mainGraphのFlowの総数
-    this.convertList = []; // convertに使う配列の配列. 通し番号で入ってる。
+    this.base = createGraphics(width, height);
+    this.additive = createGraphics(width, height);
+    this.flows = [];
+    this.baseFlows = []; // baseのflowの配列
+    this.addFlows = [];  // 動かすflowからなる配列
+    this.convertList = [];
     this.actors = [];
   }
-  // よく考えたらmainもsubもこっちにあるわけで。mainとsubの初期状態での連携もあるのに、
-  // 接続を個々のグラフにやらせるのはそもそも不可能な話だった。なので、こっちで構成します。
-  // ていうかたとえば「mainのhub」→「subのhub」ってflowはどこに所属するのよ・・・・
-  // 結論：hubもflowも独立に構成する。連携（composition）はなし。
-  // convertの情報はentityか他の何かしらの統合体が統一的に取り扱い、そこから命令を下す。できるの？？
-
-  // 衝撃の事実・・flowとhubの区別はしなくていいらしい。
-  // じゃああれ実は全部flowだけで書ける、言われてみれば当たり前か。
+  getFlow(index){
+    return this.flows[index];
+  }
   initialize(){
-    // ロード！
-    createPattern(); // グローバル・・
-    //console.log(this.mainGraph.flows);
-    this.createGraph();
-  }
-  createGraph(){
-    this.mainGraph.createVisual();
-    this.subGraph.createVisual();
-  }
-  getFlow(index){ // 通し番号からflowを取得
-    // 番号はmain→subの順につけるのよー
-    //console.log("getFlow");
-    //console.log(this.mainGraph.flows);
-    if(index < this.mainFlowNum){ return this.mainGraph.flows[index]; }
-    return this.subGraph.flows[index - this.mainFlowNum];
+    createPattern(); // ベースグラフの作成（addは毎ターン描く）
+    this.baseFlows.forEach(function(f){ f.display(this.base); }, this);
   }
   reset(){
-    this.mainGraph.reset();
-    this.subGraph.reset();
+    this.base.clear();
+    this.additive.clear();
+    this.flows = [];
+    this.baseFlows = []; // baseのflowの配列
+    this.addFlows = [];  // 動かすflowからなる配列
+    this.convertList = [];
     this.actors = [];
   }
-  getNextFlow(index, params){
-    let nextFlowIndex;
-    let indexList = this.convertList[index];
-    if(params['type'] === 'random'){ nextFlowIndex = indexList[randomInt(indexList.length)]; }
-    else if(params['type'] === 'simple'){ nextFlowIndex = indexList[0]; }
-    else if(params['type'] === 'direct'){ nextFlowIndex = indexList[params['id']];
-    }
-    return this.getFlow(nextFlowIndex);
+  getNextFlow(flowId, givenId){
+    // console.log(givenId);
+    let nextList = this.convertList[flowId];
+    let nextId;
+    if(givenId < 0){ nextId = nextList[randomInt(nextList.length)]; }
+    else{ nextId = givenId; }
+    return this.getFlow(nextList[nextId]);
   }
   registActor(flowIds, speeds, kinds){
     // flowはメソッドでidから取得。
@@ -253,42 +249,18 @@ class entity{
       this.actors.push(new actor(f, speeds[i], kinds[i]));
     }
   }
-  update(){
-    this.actors.forEach(function(_actor){
-      _actor.update();
-    })
-  }
-  display(){
-    image(this.mainGraph.visual, 0, 0);
-    image(this.subGraph.visual, 0, 0);
-    this.actors.forEach(function(_actor){
-      _actor.display();
-    })
-  }
-}
-
-class graph{
-  // グラフクラス
-  constructor(){
-    this.flows = [];
-    this.visual = createGraphics(width, height);
-  }
-  reset(){
-    this.flows = [];
-    this.visual.clear();
-  }
-  // subGraphの書き換えはここで。
-  createVisual(){
-    // たとえばsubGraphで位置情報が更新されるたびにここを・・
-    this.flows.forEach(function(f){ f.display(this.visual); }, this);
-  }
   // flowを作るときにhubを使わなきゃいいのよね
-  registFlow(paramSet){
+  // flagは付加構造を作るときにfalseが使用される・・
+  registFlow(paramSet, flag = true){
     // paramSetはパラメータの辞書(params)の配列
     paramSet.forEach(function(params){
-      let newFlow = graph.createFlow(params);
-      //console.log(newFlow);
+      let newFlow = entity.createFlow(params);
       this.flows.push(newFlow);
+      if(flag){
+        this.baseFlows.push(newFlow);
+      }else{
+        this.addFlows.push(newFlow);
+      }
     }, this);
   }
   static createFlow(params){
@@ -296,38 +268,114 @@ class graph{
       return new straightFlow(params['from'], params['to'], params['factor']);
     }
   }
+  update(){
+    this.actors.forEach(function(_actor){
+      _actor.update();
+    })
+  }
+  display(){
+    image(this.base, 0, 0);
+    if(this.addFlows.length > 0){
+      this.additive.clear();
+      this.addFlows.forEach(function(f){ f.display(this.additive); })
+    }
+    this.actors.forEach(function(_actor){
+      _actor.display();
+    })
+  }
 }
 
 // 各種画像を作ります
-function inputGraphic(gr, kind){
-  if(kind === 0){
-    gr.noStroke();
-    gr.fill(0, 0, 255); // 青い四角
-    gr.rect(2, 2, 16, 16);
+function inputGraphic(img, graphicsId){
+  img.noStroke();
+  if(graphicsId === 0){ // 普通の正方形
+    img.fill(0, 0, 255);
+    img.rect(3, 3, 14, 14);
+  }else if(graphicsId === 1){ // 三角形（火のイメージ）
+    img.fill(255, 0, 0);
+    img.triangle(10, 0, 10 + 5 * sqrt(3), 15, 10 - 5 * sqrt(3), 15);
+  }else if(graphicsId === 2){ // ダイヤ型（クリスタルのイメージ）（色合い工夫してもいいかも）
+    img.fill(187, 102, 187);
+    img.quad(10, 0, 10 + 10 / sqrt(3), 10, 10, 20, 10 - 10 / sqrt(3), 10);
+  }else if(graphicsId === 3){ // 手裏剣（忍者のイメージ）
+    img.fill(0);
+    img.quad(7, 6, 13, 0, 13, 14, 7, 20);
+    img.quad(0, 7, 14, 7, 20, 13, 6, 13);
+    img.fill(255);
+    img.ellipse(10, 10, 5, 5);
+  }else if(graphicsId === 4){ // くさび型（草のイメージ・・くさびだけに（？）
+    img.fill(32, 168, 72);
+    img.quad(10, 2, 2, 18, 10, 10, 18, 18);
+  }else if(graphicsId === 5){ // 水色のなんか
+    img.fill(0, 162, 232);
+    for(let k = 0; k < 6; k++){
+      let t = 2 * PI * k / 6;
+      let t1 = t + 2 * PI / 20;
+      let t2 = t - 2 * PI / 20;
+      img.quad(10 + 10 * sin(t), 10 - 10 * cos(t), 10 + 5 * sin(t1), 10 - 5 * cos(t1), 10, 10, 10 + 5 * sin(t2), 10 - 5 * cos(t2));
+    }
+  }else if(graphicsId === 6){ // 星。
+    img.fill(255, 242, 0);
+    for(let k = 0; k < 5; k++){
+      let t = 2 * PI * k / 5;
+      let t1 = t - 2 * PI / 10;
+      let t2 = t + 2 * PI / 10;
+      img.triangle(10 + 10 * sin(t), 10 - 10 * cos(t), 10 + 5 * sin(t1), 10 - 5 * cos(t1), 10 + 5 * sin(t2), 10 - 5 * cos(t2));
+    }
+    img.ellipse(10, 10, 10, 10);
   }
 }
 
 // ここでmain→subの順にregistすればOK
+/*
 function createPattern(){
   let posX = [100, 300, 300, 100];
   let posY = [100, 100, 300, 300];
   let vecs = getVectors(posX, posY);
   let paramSet = getOrbitalFlows(vecs, [0, 1, 2], [1, 2, 3], 'straight');
   paramSet.forEach(function(params){ params['factor'] = 1; });
-  // mainとsubへの振り分け
-  all.mainGraph.registFlow(paramSet);
-  all.mainFlowNum = all.mainGraph.flows.length; // mainGraphのflowの数はここで計算する
+  all.registFlow(paramSet);
   // パターンで指定することが増えたね。
   // 1. convertListの初期設定
   // 2. convert typeの設定、convert可能性の初期設定（たとえば行き止まりには指定しない）
   all.convertList = [[1], [2], []];
-  let mainFlows = all.mainGraph.flows;
-  //console.log(all.mainGraph.flows);
-  for(let i = 0; i < 2; i++){ mainFlows[i].params['type'] = 'simple'; mainFlows[i].convertible = true; }
-  all.registActor([0], [2], [0]);
+  for(let i = 0; i < 2; i++){ all.flows[i].convertFunc = simple; all.flows[i].convertible = true; }
+  all.registActor([0], [2], [6]);
+}*/
+
+// 実践しましょうか
+function createPattern(){
+  let posX = arSeq(20, 50, 8).concat(arSeq(20, 50, 8));
+  let posY = constSeq(50, 8).concat(constSeq(100, 8));
+  let vecs = getVectors(posX, posY);
+  let paramSet = getOrbitalFlows(vecs, arSeq(0, 1, 7).concat([8, 1, 2, 3, 4, 5, 6, 7]).concat(arSeq(9, 1, 7)), arSeq(1, 1, 7).concat([0, 9, 10, 11, 12, 13, 14,
+  15]).concat(arSeq(8, 1, 7)),'straight');
+  paramSet.forEach(function(params){ params['factor'] = 1; });
+  all.registFlow(paramSet);
+  all.convertList = [[8, 1], [9, 2], [10, 3], [11, 4], [12, 5], [13, 6], [14], [0], [15], [16], [17], [18], [19], [20], [21],
+  [7], [15], [16], [17], [18], [19], [20]];
+  for(let i = 0; i < 22; i++){ all.flows[i].convertible = true;  }
+  for(let i = 0; i < 6; i++){ all.flows[i].convertFunc = equiv; }
+  for(let i = 6; i < 22; i++){all.flows[i].convertFunc = simple; }
+  all.registActor([0, 0, 0, 0, 0, 0, 0], [1, 1.5, 2, 2.5, 3, 3.5, 4], [0, 1, 2, 3, 4, 5, 6])
 }
 
+
 // utility.
+function constSeq(c, n){
+  // cがn個。
+  let array = [];
+  for(let i = 0; i < n; i++){ array.push(c); }
+  return array;
+}
+
+function arSeq(start, interval, n){
+  // startからintervalずつn個
+  let array = [];
+  for(let i = 0; i < n; i++){ array.push(start + interval * i); }
+  return array;
+}
+
 function randomInt(n){
   // 0, 1, ..., n-1のどれかを返す
   return Math.floor(random(n));
@@ -349,4 +397,14 @@ function getOrbitalFlows(vecs, fromIds, toIds, typename){
     paramSet.push(dict);
   }
   return paramSet;
+}
+
+// 各種代入関数
+function triv(_flow, _actor){ return -1; }
+function simple(_flow, _actor){ return 0; }
+function equiv(_flow, _actor){
+  if(_flow.index === _actor.visual.kind){
+    return 0;
+  }
+  return 1;
 }
