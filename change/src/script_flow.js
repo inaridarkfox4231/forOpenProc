@@ -56,6 +56,7 @@ class counter{
 }
 
 // 全部フロー。convertはallの仕事。hubは廃止。
+// あ、そか、いじるの単に数でいいんだ。位置情報とかじゃなくても。まあそれはそれで。
 class flow{
   constructor(){
     this.index = flow.index++;
@@ -199,17 +200,17 @@ class shootingFlow extends flow{
 
 // 放物線を描きながら画面外に消えていく
 class fallFlow extends shootingFlow{
-  constructor(from, c, h){
+  constructor(from, ax, vy){
     super(from);
-    this.center = c;
-    this.divisor = (c * c) / (2 * h); // 要は(x - c)/dみたいな式を作る。dは最高点までの水平距離、hは最高点の高さ。
+    this.ax = ax;
+    this.vy = vy; // 加速度ax, 初期速度vy.
   }
   execute(_actor){
     if(!_actor.timer.getState()){ return; }
     _actor.timer.step();
     let cnt = _actor.timer.getCnt();
-    _actor.pos.x += _actor.speed;
-    _actor.pos.y += (cnt - this.center) / this.divisor;
+    _actor.pos.x += this.ax;
+    _actor.pos.y += (cnt - this.vy) / 10;
     shootingFlow.eject(_actor);
   }
 }
@@ -224,7 +225,7 @@ class throwFlow extends shootingFlow{
     if(!_actor.timer.getState()){ return; }
     _actor.timer.step();
     let cnt = _actor.timer.getCnt();
-    _actor.pos.x += this.v.x * _actor.speed;
+    _actor.pos.x += this.v.x * _actor.speed; // ベクトルvの方向にばひゅーん
     _actor.pos.y += this.v.y * _actor.speed;
     shootingFlow.eject(_actor);
   }
@@ -359,21 +360,11 @@ class entity{
     this.initialize(); // これだけか。まぁhub無くなったしな。
   }
   getNextFlow(flowId, givenId){
-    // console.log(givenId);
     // givenIdが-1のときはランダム、具体的なときはそれを返す。そんだけ。
-    //console.log(flowId);
-    //console.log(this.convertList);
     let nextList = this.convertList[flowId];
-    //console.log("flowId = %d", flowId);
-    //console.log("givenId = %d", givenId);
-    //console.log("all.flows.length = %d", all.flows.length);
-    //console.log(nextList);
     let nextId;
     if(givenId < 0){
-      //console.log("random");
-      //console.log(nextList);
       nextId = nextList[randomInt(nextList.length)];
-      //console.log(nextId);
     }else{
       nextId = nextList[givenId]; // わぁ・・勘違いしてた。。
     }
@@ -383,8 +374,6 @@ class entity{
     // flowはメソッドでidから取得。
     for(let i = 0; i < flowIds.length; i++){
       let f = this.getFlow(flowIds[i]);
-      //console.log('registActor');
-      //console.log(f);
       this.actors.push(new actor(f, speeds[i], kinds[i]));
     }
   }
@@ -410,7 +399,7 @@ class entity{
     }else if(params['type'] === 'assemble'){
       return new assembleHub(params['limit']);
     }else if(params['type'] === 'fall'){
-      return new fallFlow(params['from'], params['c'], params['h']);
+      return new fallFlow(params['from'], params['ax'], params['vy']);
     }else if(params['type'] === 'throw'){
       return new throwFlow(params['from'], params['v']);
     }
@@ -470,8 +459,8 @@ function createPattern1(){
   let posX = arSinSeq(0, PI / 3, 6, 60, 200).concat(arSinSeq(0, PI / 3, 6, 120, 200)).concat([200]);
   let posY = arCosSeq(0, PI / 3, 6, -60, 200).concat(arCosSeq(0, PI / 3, 6, -120, 200)).concat([200]);
   let vecs = getVectors(posX, posY);
-  let fromList = [1, 2, 3, 4, 5, 0, 6, 7, 8, 9, 10, 11, 0, 12, 2, 12, 4, 12, 0, 7, 2, 9, 4, 11];
-  let toList = [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 6, 12, 1, 12, 3, 12, 5, 6, 1, 8, 3, 10, 5];
+  let fromList = [1, 2, 3, 4, 5, 0, 6, 7, 8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+  let toList = [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 6, 12, 12, 12, 12, 12, 12, 0, 1, 2, 3, 4, 5];
   let paramSet = getOrbitalFlow(vecs, fromList, toList, 'straight');
   paramSet.forEach(function(params){ params['factor'] = 1; });
   let jumpfromList = constSeq(12, 6);
@@ -480,7 +469,7 @@ function createPattern1(){
   all.registFlow(paramSet);
   all.registFlow([{type: 'assemble', limit: 6}]); // assembleHub. (31個目)
   // 若干つなぎ方を変えようかな・・
-  all.convertList = [[5, 12, 18], [0], [1, 14, 20], [2], [3, 16, 22], [4], [7, 19], [8], [9, 21], [10], [11, 23], [6], [30], [0], [30], [2], [30], [4], [6], [0], [8], [2], [10], [4], [6], [7], [8], [9], [10], [11], [24, 25, 26, 27, 28, 29]];
+  all.convertList = [[5, 12], [0, 13], [1, 14], [2, 15], [3, 16], [4, 17], [7, 19], [8, 20], [9, 21], [10, 22], [11, 23], [6, 18], [30], [30], [30], [30], [30], [30], [5, 12], [0, 13], [1, 14], [2, 15], [3, 16], [4, 17], [6, 18], [7, 19], [8, 20], [9, 21], [10, 22], [11, 23], [24, 25, 26, 27, 28, 29]];
   all.registActor([6, 7, 8, 9, 10, 11], [2, 2, 2, 2, 2, 2], [0, 1, 2, 3, 4, 5]);
   // convertの仕方をいじりますか
   all.flows[30].convertFunc = splitConvert; // まあ、色に応じて違う場所にとばしましょう。
@@ -488,15 +477,43 @@ function createPattern1(){
 
 function createPattern2(){
   // simpleなやつ
-  let vecs = getVectors([100, 200, 100], [100, 100, 200]);
-  let paramSet = [{type:'straight', from:vecs[0], to:vecs[1], factor: 1}, {type:'fall', from:vecs[1], c:50, h:100}, {type:'throw', from: vecs[1], v:createVector(10, 10)}];
+  let posX = [200, 300, 300, 300, 200, 100, 100, 100, 200];
+  let posY = [100, 100, 200, 300, 300, 300, 200, 100, 200];
+  let vecs = getVectors(posX, posY);
+  let fromList = [8, 8, 8, 8, 0, 1, 2, 3, 4, 5, 6, 7];
+  let toList = [0, 2, 4, 6, 1, 2, 3, 4, 5, 6, 7, 0];
+  let paramSet = getOrbitalFlow(vecs, fromList, toList, 'straight');
+  paramSet.forEach(function(params){ params['factor'] = 1; }); // allOneってオプション付けるか・・面倒臭くなってきた
   all.registFlow(paramSet);
-  all.convertList = [[2, 2], [], []]; // 1と2の行先はなし
-  all.registActor([0, 0], [1, 1], [0, 0]);
+  let otherSet = getShootingFlow(vecs, [0, 2, 4, 6], 'throw').concat(getShootingFlow(vecs, [1, 3, 5, 7], 'fall'));
+  let dx = [0, 5, 0, -5];
+  let dy = [-5, 0, 5, 0];
+  for(let i = 0; i < 4; i++){
+    otherSet[i]['v'] = createVector(dx[i], dy[i]);
+  }
+  for(let i = 4; i < 6; i++){
+    otherSet[i]['ax'] = 2; otherSet[i]['vy'] = 20;
+  }
+  for(let i = 6; i < 8; i++){
+    otherSet[i]['ax'] = -2; otherSet[i]['vy'] = 20;
+  }
+  all.registFlow(otherSet);
+  all.convertList = [[4, 12], [6, 13], [8, 14], [10, 15], [5, 16], [6, 13], [7, 17], [8, 14], [9, 18], [10, 15], [11, 19], [4, 12]];
+  all.registActor([0, 1, 2, 3], [1.5, 2, 1.5, 2], [1, 2, 3, 4]);
+  for(let i = 12; i < 20; i++){
+    all.flows[i].initialFunc = generateMultiActor;
+  }
 }
 
 //---------------------------------------------------------------------------------------//
 // utility.
+function typeSeq(typename, n){
+  // typenameの辞書がn個。
+  let array = [];
+  for(let i = 0; i < n; i++){ array.push({type: typename}); }
+  return array;
+}
+
 function constSeq(c, n){
   // cがn個。
   let array = [];
@@ -548,6 +565,15 @@ function getOrbitalFlow(vecs, fromIds, toIds, typename){
   return paramSet;
 }
 
+function getShootingFlow(vecs, fromIds, typename){
+  let paramSet = [];
+  for(let i = 0; i < fromIds.length; i++){
+    let dict = {type: typename, from: vecs[fromIds[i]]};
+    paramSet.push(dict);
+  }
+  return paramSet;
+}
+
 // 各種代入関数
 function trivVoid(_flow, _actor){ return; } // initializeとcomplete時のデフォルト。
 function triv(_flow, _actor){ return -1; } // デフォルトではすべてランダムコンバート、を表現したもの
@@ -564,6 +590,14 @@ function generateActor(_flow, _actor){ // actorの生成ポイント
   if(all.actors.length >= 10){ return; }
   all.registActor([0], [2 + randomInt(3)], [randomInt(7)]);
   // これをいくつか配置しておいて踏むと0番にactorが生成する感じ
+}
+
+function generateMultiActor(_flow, _actor){
+  if(all.actors.length >= 10){ return; }
+  let speeds = [];
+  let kinds = [];
+  for(let i = 0; i < 4; i++){ speeds.push(1 + random(2)); kinds.push(randomInt(7)); }
+  all.registActor([0, 1, 2, 3], speeds, kinds);
 }
 
 // 抹消
