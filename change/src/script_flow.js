@@ -4,7 +4,7 @@
 let all; // 全体
 let palette; // カラーパレット
 
-const PATTERN_NUM = 2;
+const PATTERN_NUM = 3;
 
 function setup(){
   createCanvas(400, 400);
@@ -36,7 +36,7 @@ function mouseClicked(){
 class counter{
   constructor(){
     this.cnt = 0;
-    this.limit;
+    this.limit; // -1に設定すると無限カウントになる
     this.isOn;
     this.diff; // これ要るかな・・カウントの進め方をカスタマイズできるようにすれば要らないかも
   }
@@ -50,7 +50,7 @@ class counter{
   }
   step(){
     this.cnt += this.diff;
-    if(this.cnt > this.limit){ this.isOn = false; }
+    if(this.cnt > this.limit && this.limit > 0){ this.isOn = false; } // 忘れてたーーー -1だとあれ。
   }
   pause(){ this.isOn = !this.isOn; } // ポーズ要るかどうか
 }
@@ -68,15 +68,46 @@ class flow{
   }
   isConvertible(){ return this.convertible; }
   initialize(_actor){ this.initialFunc(this, _actor); } // プロセス開始時の処理。たとえばstraightFlowならtimerのsettingとか
-  // default(){} // どこにも行けない時の処理を書くかもしれない
+  // defaultAction(_actor){} // completeしたあとconvert出来ない時の処理（一定のペースで跳ねるとか？ぴょんぴょん）
+  // エレベータの待ち時間とか表現するのに使えるかもしれない
   execute(_actor){} // 処理の本体
   complete(_actor){ this.completeFunc(this, _actor); } // プロセス終了時の処理。たとえば_actor.kill()でここで終わったりとか
   // paramsに何か入れるときはここ↑に書いてください。params['id'] = '_actorの色のid' とか。
   convert(_actor){
     let nextFlow = all.getNextFlow(this.index, this.convertFunc(this, _actor));
+    //console.log(nextFlow);
     _actor.state = nextFlow;
   } // allに頼んで次のflowを設定してもらう
   display(gr){} // line型なら線、hub型ならボックスとかそういうのを描画する用。
+}
+
+// hubです。位置情報とかはないです。あくまでflowをつなぐもの、位置はactorが持ってるので。
+class assembleHub extends flow{
+  // いくつか集まったら解放される。
+  constructor(lim){
+    super();
+    this.limit = lim;
+    this.volume = 0; // lim-1→limのときtrue, 1→0のときfalse.
+    this.convertible = false;
+  }
+  initialize(_actor){
+    this.initialFunc(this, _actor);
+    console.log(this);
+    this.volume++;
+    console.log(this.volume);
+    console.log(this.limit);
+    if(this.volume >= this.limit){ this.convertible = true; }
+  }
+  execute(_actor){ _actor.isActive = false; } // やることないのでいきなりfalse.
+  // やったできた。簡単じゃないかー。
+  // convertFuncでvolumeと連携させれば「散開」も可能になるはず（ばーーってやつ）
+  convert(_actor){
+    let nextFlow = all.getNextFlow(this.index, this.convertFunc(this, _actor));
+    _actor.state = nextFlow;
+    console.log(nextFlow);
+    this.volume--;
+    if(this.volume === 0){ this.convertible = false; } // 空になったら閉じる
+  }
 }
 
 // 始点と終点とspanからなりどこかからどこかへ行くことが目的のFlow.
@@ -89,9 +120,27 @@ class orbitalFlow extends flow{
   }
   getSpan(){ return this.span; }
   initialize(_actor){
+    // タイマー使ってるけどオービタルだからだよ
     this.initialFunc(this, _actor)
     _actor.pos.set(this.from.x, this.from.y);
     _actor.timer.setting(this.span, _actor.speed);
+  }
+}
+
+class jumpFlow extends orbitalFlow{
+  // ジャンプするやつ
+  constructor(from, to){
+    super(from, to);
+    this.span = p5.Vector.dist(from, to);
+  }
+  execute(_actor){
+    if(!_actor.timer.getState()){ return; } // 車の一時停止とかに使えそう
+    _actor.timer.step();
+    let cnt = _actor.timer.getCnt();
+    _actor.pos.x = map(cnt, 0, this.span, this.from.x, this.to.x);
+    _actor.pos.y = map(cnt, 0, this.span, this.from.y, this.to.y);
+    _actor.pos.y -= (2 / this.span) * cnt * (this.span - cnt); // 高さはとりあえずthis.span/2にしてみる
+    if(!_actor.timer.getState()){ _actor.isActive = false; } // タイマーが切れたらnon-Activeにする
   }
 }
 
@@ -108,7 +157,6 @@ class straightFlow extends orbitalFlow{
     // ストレートフロー
     if(!_actor.timer.getState()){ return; } // 車の一時停止とかに使えそう
     _actor.timer.step();
-    //console.log(_actor.pos);
     let cnt = _actor.timer.getCnt();
     _actor.pos.x = map(cnt, 0, this.span / this.factor, this.from.x, this.to.x);
     _actor.pos.y = map(cnt, 0, this.span / this.factor, this.from.y, this.to.y);
@@ -129,6 +177,61 @@ class straightFlow extends orbitalFlow{
     gr.pop();
   }
 }
+
+// actorを画面外にふっとばす
+class shootingFlow extends flow{
+  constructor(from){
+    super();
+    this.from = from;
+  }
+  initialize(_actor){
+    this.initialFunc(this, _actor)
+    _actor.pos.set(this.from.x, this.from.y);
+    _actor.timer.setting(-1, _actor.speed); // 画面外に出たらactorをkillするので無限カウントで
+  }
+  static eject(_actor){
+    // 画面外に出たら抹殺(isActiveはそのままでいい)
+    if(_actor.pos.x > width || _actor.pos.x < 0 || _actor.pos.y < 0 || _actor.pos.y > height){
+      _actor.kill(); // 画面外に出たら消える
+    }
+  }
+}
+
+// 放物線を描きながら画面外に消えていく
+class fallFlow extends shootingFlow{
+  constructor(from, c, h){
+    super(from);
+    this.center = c;
+    this.divisor = (c * c) / (2 * h); // 要は(x - c)/dみたいな式を作る。dは最高点までの水平距離、hは最高点の高さ。
+  }
+  execute(_actor){
+    if(!_actor.timer.getState()){ return; }
+    _actor.timer.step();
+    let cnt = _actor.timer.getCnt();
+    _actor.pos.x += _actor.speed;
+    _actor.pos.y += (cnt - this.center) / this.divisor;
+    shootingFlow.eject(_actor);
+  }
+}
+
+// 直線的に動きながら消滅
+class throwFlow extends shootingFlow{
+  constructor(from, v){
+    super(from);
+    this.v = v; // 大きさ正規化しないほうが楽しいからこれでいいや
+  }
+  execute(_actor){
+    if(!_actor.timer.getState()){ return; }
+    _actor.timer.step();
+    let cnt = _actor.timer.getCnt();
+    _actor.pos.x += this.v.x * _actor.speed;
+    _actor.pos.y += this.v.y * _actor.speed;
+    shootingFlow.eject(_actor);
+  }
+}
+
+// あっちでやったように、ある程度ロードごとにランダムでfallやthrow, それにいろんな方向で
+// 生成されるようにしたら面白いかもね。
 
 // とりあえずこれしか使ってないですね・・あのプログラムでは。というか基本的に。
 // それこそ色に応じてオブジェクトをえり分けるとかそういうことをやってないですから。今のところは。
@@ -228,14 +331,14 @@ class entity{
     this.convertList = [];
     this.actors = [];
     this.patternIndex = 0; // うまくいくのかな・・
-    this.patternArray = [createPattern0, createPattern1];
+    this.patternArray = [createPattern0, createPattern1, createPattern2];
   }
   getFlow(index){
     return this.flows[index];
   }
   initialize(){
     this.patternArray[this.patternIndex](); // ベースグラフの作成（addは毎ターン描く）
-    console.log(this.convertList);
+    //console.log(this.convertList);
     this.baseFlows.forEach(function(f){ f.display(this.base); }, this);
   }
   reset(){
@@ -258,14 +361,19 @@ class entity{
   getNextFlow(flowId, givenId){
     // console.log(givenId);
     // givenIdが-1のときはランダム、具体的なときはそれを返す。そんだけ。
-    console.log(flowId);
-    console.log(this.convertList);
+    //console.log(flowId);
+    //console.log(this.convertList);
     let nextList = this.convertList[flowId];
+    //console.log("flowId = %d", flowId);
+    //console.log("givenId = %d", givenId);
+    //console.log("all.flows.length = %d", all.flows.length);
+    //console.log(nextList);
     let nextId;
     if(givenId < 0){
       //console.log("random");
       //console.log(nextList);
       nextId = nextList[randomInt(nextList.length)];
+      //console.log(nextId);
     }else{
       nextId = nextList[givenId]; // わぁ・・勘違いしてた。。
     }
@@ -297,6 +405,14 @@ class entity{
   static createFlow(params){
     if(params['type'] === 'straight'){
       return new straightFlow(params['from'], params['to'], params['factor']);
+    }else if(params['type'] === 'jump'){
+      return new jumpFlow(params['from'], params['to']);
+    }else if(params['type'] === 'assemble'){
+      return new assembleHub(params['limit']);
+    }else if(params['type'] === 'fall'){
+      return new fallFlow(params['from'], params['c'], params['h']);
+    }else if(params['type'] === 'throw'){
+      return new throwFlow(params['from'], params['v']);
     }
   }
   update(){
@@ -333,14 +449,14 @@ function createPattern0(){
   let posX = arSeq(20, 50, 8).concat(arSeq(20, 50, 8));
   let posY = constSeq(50, 8).concat(constSeq(300, 8));
   let vecs = getVectors(posX, posY);
-  let paramSet = getOrbitalFlows(vecs, arSeq(0, 1, 7).concat([8, 1, 2, 3, 4, 5, 6, 7]).concat(arSeq(9, 1, 7)), arSeq(1, 1, 7).concat([0, 9, 10, 11, 12, 13, 14,
+  let paramSet = getOrbitalFlow(vecs, arSeq(0, 1, 7).concat([8, 1, 2, 3, 4, 5, 6, 7]).concat(arSeq(9, 1, 7)), arSeq(1, 1, 7).concat([0, 9, 10, 11, 12, 13, 14,
   15]).concat(arSeq(8, 1, 7)),'straight');
   paramSet.forEach(function(params){ params['factor'] = 1; });
   all.registFlow(paramSet);
   all.convertList = [[8, 1], [9, 2], [10, 3], [11, 4], [12, 5], [13, 6], [14], [0], [15], [16], [17], [18], [19], [20], [21],
   [7], [15], [16], [17], [18], [19], [20]];
-  //for(let i = 0; i < 22; i++){ all.flows[i].convertible = true;  } // めんどくさいからデフォルトtrueにして・・・
-  for(let i = 0; i < 6; i++){ all.flows[i].convertFunc = equiv; }
+  // convertibleのデフォルトはtrueになりました。
+  for(let i = 0; i < 6; i++){ all.flows[i].convertFunc = equiv; } // flowと同じindexのballが曲がる
   for(let i = 6; i < 22; i++){all.flows[i].convertFunc = simple; }
   // 生成ポイント
   for(let i = 16; i < 22; i++){ all.flows[i].completeFunc = generateActor; }
@@ -350,19 +466,36 @@ function createPattern0(){
 }
 
 function createPattern1(){
-  let vecs = [];
-  for(let i = 0; i < 3; i++){
-    for(let k = 0; k < 3; k++){
-      vecs.push(createVector(50 + k * 100, 50 + i * 100));
-    }
-  }
-  let paramSet = getOrbitalFlows(vecs, [0, 1, 3, 1, 2, 4, 5, 6, 4, 5, 7, 8], [1, 2, 0, 4, 5, 3, 4, 3, 7, 8, 6, 7], 'straight');
+  // まずposXとposYからベクトルの列を。
+  let posX = arSinSeq(0, PI / 3, 6, 60, 200).concat(arSinSeq(0, PI / 3, 6, 120, 200)).concat([200]);
+  let posY = arCosSeq(0, PI / 3, 6, -60, 200).concat(arCosSeq(0, PI / 3, 6, -120, 200)).concat([200]);
+  let vecs = getVectors(posX, posY);
+  let fromList = [1, 2, 3, 4, 5, 0, 6, 7, 8, 9, 10, 11, 0, 12, 2, 12, 4, 12, 0, 7, 2, 9, 4, 11];
+  let toList = [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 6, 12, 1, 12, 3, 12, 5, 6, 1, 8, 3, 10, 5];
+  let paramSet = getOrbitalFlow(vecs, fromList, toList, 'straight');
   paramSet.forEach(function(params){ params['factor'] = 1; });
+  let jumpfromList = constSeq(12, 6);
+  let jumptoList = arSeq(6, 1, 6);
+  paramSet = paramSet.concat(getOrbitalFlow(vecs, jumpfromList, jumptoList, 'jump'));
   all.registFlow(paramSet);
-  all.convertList = [[1, 3], [4], [0], [5, 8], [6, 9], [2], [5, 8], [2], [10], [11], [7], [10]];
-  all.registActor([0], [3], [0]);
+  all.registFlow([{type: 'assemble', limit: 6}]); // assembleHub. (31個目)
+  // 若干つなぎ方を変えようかな・・
+  all.convertList = [[5, 12, 18], [0], [1, 14, 20], [2], [3, 16, 22], [4], [7, 19], [8], [9, 21], [10], [11, 23], [6], [30], [0], [30], [2], [30], [4], [6], [0], [8], [2], [10], [4], [6], [7], [8], [9], [10], [11], [24, 25, 26, 27, 28, 29]];
+  all.registActor([6, 7, 8, 9, 10, 11], [2, 2, 2, 2, 2, 2], [0, 1, 2, 3, 4, 5]);
+  // convertの仕方をいじりますか
+  all.flows[30].convertFunc = splitConvert; // まあ、色に応じて違う場所にとばしましょう。
 }
 
+function createPattern2(){
+  // simpleなやつ
+  let vecs = getVectors([100, 200, 100], [100, 100, 200]);
+  let paramSet = [{type:'straight', from:vecs[0], to:vecs[1], factor: 1}, {type:'fall', from:vecs[1], c:50, h:100}, {type:'throw', from: vecs[1], v:createVector(10, 10)}];
+  all.registFlow(paramSet);
+  all.convertList = [[2, 2], [], []]; // 1と2の行先はなし
+  all.registActor([0, 0], [1, 1], [0, 0]);
+}
+
+//---------------------------------------------------------------------------------------//
 // utility.
 function constSeq(c, n){
   // cがn個。
@@ -375,6 +508,20 @@ function arSeq(start, interval, n){
   // startからintervalずつn個
   let array = [];
   for(let i = 0; i < n; i++){ array.push(start + interval * i); }
+  return array;
+}
+
+function arCosSeq(start, interval, n, radius = 1, pivot = 0){
+  // startからintervalずつn個をradius * cos([]) の[]に放り込む。pivotは定数ずらし。
+  let array = [];
+  for(let i = 0; i < n; i++){ array.push(pivot + radius * cos(start + interval * i)); }
+  return array;
+}
+
+function arSinSeq(start, interval, n, radius = 1, pivot = 0){
+  // startからintervalずつn個をradius * sin([]) の[]に放り込む。pivotは定数ずらし。
+  let array = [];
+  for(let i = 0; i < n; i++){ array.push(pivot + radius * sin(start + interval * i)); }
   return array;
 }
 
@@ -392,7 +539,7 @@ function getVectors(posX, posY){
 }
 
 // OrbitalFlow用の辞書作るよー
-function getOrbitalFlows(vecs, fromIds, toIds, typename){
+function getOrbitalFlow(vecs, fromIds, toIds, typename){
   let paramSet = [];
   for(let i = 0; i < fromIds.length; i++){
     let dict = {type: typename, from: vecs[fromIds[i]], to: vecs[toIds[i]]};
@@ -402,7 +549,7 @@ function getOrbitalFlows(vecs, fromIds, toIds, typename){
 }
 
 // 各種代入関数
-function trivVoid(_flow, _actor){ return; }
+function trivVoid(_flow, _actor){ return; } // initializeとcomplete時のデフォルト。
 function triv(_flow, _actor){ return -1; } // デフォルトではすべてランダムコンバート、を表現したもの
 function simple(_flow, _actor){ return 0; }
 function equiv(_flow, _actor){
@@ -411,9 +558,16 @@ function equiv(_flow, _actor){
   }
   return 1;
 }
+
+// 生成（10-limit）
 function generateActor(_flow, _actor){ // actorの生成ポイント
   if(all.actors.length >= 10){ return; }
   all.registActor([0], [2 + randomInt(3)], [randomInt(7)]);
   // これをいくつか配置しておいて踏むと0番にactorが生成する感じ
 }
+
+// 抹消
 function killActor(_flow, _actor){ _actor.kill(); }
+
+// 散開
+function splitConvert(_flow, _actor){ return _actor.visual.kind; } // これはactorのあれに依存してて・・まあいい。
