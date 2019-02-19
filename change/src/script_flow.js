@@ -2,11 +2,16 @@
 
 'use strict';
 let all; // 全体
+let palette; // カラーパレット
+
+const PATTERN_NUM = 2;
 
 function setup(){
   createCanvas(400, 400);
+  palette = [color(248, 155, 1), color(248, 230, 1), color(38, 248, 1), color(1, 248, 210), color(2, 9, 247), color(240, 2, 247), color(249, 0, 6)];
   all = new entity();
   all.initialize();
+  console.log(palette);
 }
 
 function draw(){
@@ -19,6 +24,12 @@ function draw(){
 function keyTyped(){
   if(key === 'p'){ noLoop(); }
   if(key === 'q'){ loop(); }
+}
+
+// バリエーションチェンジ
+function mouseClicked(){
+  let newIndex = (all.patternIndex + 1) % PATTERN_NUM;
+  all.switchPattern(newIndex);
 }
 
 // 簡単なものでいいです
@@ -48,7 +59,7 @@ class counter{
 class flow{
   constructor(){
     this.index = flow.index++;
-    this.convertible = false; // デフォルト（convertできるところだけtrueにする）
+    this.convertible = true; // デフォルト（convertできないところだけsettingでfalseにする）
     //this.params = {}; // convertに使うパラメータ（たとえば'simple'とか'random'とか指定）
     // paramsを廃止してみる
     this.initialFunc = trivVoid;
@@ -118,9 +129,9 @@ class straightFlow extends orbitalFlow{
     gr.pop();
   }
 }
+
 // とりあえずこれしか使ってないですね・・あのプログラムでは。というか基本的に。
 // それこそ色に応じてオブジェクトをえり分けるとかそういうことをやってないですから。今のところは。
-// たとえばgenerateHubとかこの後定義するけどね。
 
 flow.index = 0; // convertに使うflowの連番
 
@@ -166,7 +177,7 @@ class actor{
     for(selfId = 0; selfId < all.actors.length; selfId++){
       if(all.actors[selfId].index === this.index){ break; }
     }
-    console.log("selfId = %d", selfId);
+    //console.log("selfId = %d", selfId);
     all.actors.splice(selfId, 1);
   }
 }
@@ -210,18 +221,21 @@ class rollingFigure extends figure{
 class entity{
   constructor(){
     this.base = createGraphics(width, height);
-    this.additive = createGraphics(width, height);
+    this.additive = createGraphics(width, height); // addFlowsで作るやつー
     this.flows = [];
     this.baseFlows = []; // baseのflowの配列
     this.addFlows = [];  // 動かすflowからなる配列
     this.convertList = [];
     this.actors = [];
+    this.patternIndex = 0; // うまくいくのかな・・
+    this.patternArray = [createPattern0, createPattern1];
   }
   getFlow(index){
     return this.flows[index];
   }
   initialize(){
-    createPattern(); // ベースグラフの作成（addは毎ターン描く）
+    this.patternArray[this.patternIndex](); // ベースグラフの作成（addは毎ターン描く）
+    console.log(this.convertList);
     this.baseFlows.forEach(function(f){ f.display(this.base); }, this);
   }
   reset(){
@@ -232,15 +246,30 @@ class entity{
     this.addFlows = [];  // 動かすflowからなる配列
     this.convertList = [];
     this.actors = [];
+    // 通し番号リセットしないといけないんだ・・・・・・今まで使ってなかったから全然気づかなかった
+    flow.index = 0;
+    actor.index = 0;
+  }
+  switchPattern(newIndex){
+    this.reset();
+    this.patternIndex = newIndex;
+    this.initialize(); // これだけか。まぁhub無くなったしな。
   }
   getNextFlow(flowId, givenId){
     // console.log(givenId);
     // givenIdが-1のときはランダム、具体的なときはそれを返す。そんだけ。
+    console.log(flowId);
+    console.log(this.convertList);
     let nextList = this.convertList[flowId];
     let nextId;
-    if(givenId < 0){ nextId = nextList[randomInt(nextList.length)]; }
-    else{ nextId = givenId; }
-    return this.getFlow(nextList[nextId]);
+    if(givenId < 0){
+      //console.log("random");
+      //console.log(nextList);
+      nextId = nextList[randomInt(nextList.length)];
+    }else{
+      nextId = nextList[givenId]; // わぁ・・勘違いしてた。。
+    }
+    return this.getFlow(nextId);
   }
   registActor(flowIds, speeds, kinds){
     // flowはメソッドでidから取得。
@@ -277,11 +306,12 @@ class entity{
   }
   display(){
     image(this.base, 0, 0);
-    if(this.addFlows.length > 0){
+    if(this.addFlows.length > 0){ // 付加的な要素は毎フレーム描画し直す感じで
       this.additive.clear();
       this.addFlows.forEach(function(f){ f.display(this.additive); })
+      image(this.additive, 0, 0); // 忘れてた、これ無かったら描画されないじゃん
     }
-    this.actors.forEach(function(_actor){
+    this.actors.forEach(function(_actor){ // actorの描画
       _actor.display();
     })
   }
@@ -290,48 +320,16 @@ class entity{
 // 各種画像を作ります
 function inputGraphic(img, graphicsId){
   img.noStroke();
-  if(graphicsId === 0){ // 普通の正方形
-    img.fill(0, 0, 255);
-    img.rect(3, 3, 14, 14);
-  }else if(graphicsId === 1){ // 三角形（火のイメージ）
-    img.fill(255, 0, 0);
-    img.triangle(10, 0, 10 + 5 * sqrt(3), 15, 10 - 5 * sqrt(3), 15);
-  }else if(graphicsId === 2){ // ダイヤ型（クリスタルのイメージ）（色合い工夫してもいいかも）
-    img.fill(187, 102, 187);
-    img.quad(10, 0, 10 + 10 / sqrt(3), 10, 10, 20, 10 - 10 / sqrt(3), 10);
-  }else if(graphicsId === 3){ // 手裏剣（忍者のイメージ）
-    img.fill(0);
-    img.quad(7, 6, 13, 0, 13, 14, 7, 20);
-    img.quad(0, 7, 14, 7, 20, 13, 6, 13);
-    img.fill(255);
-    img.ellipse(10, 10, 5, 5);
-  }else if(graphicsId === 4){ // くさび型（草のイメージ・・くさびだけに（？）
-    img.fill(32, 168, 72);
-    img.quad(10, 2, 2, 18, 10, 10, 18, 18);
-  }else if(graphicsId === 5){ // 水色のなんか
-    img.fill(0, 162, 232);
-    for(let k = 0; k < 6; k++){
-      let t = 2 * PI * k / 6;
-      let t1 = t + 2 * PI / 20;
-      let t2 = t - 2 * PI / 20;
-      img.quad(10 + 10 * sin(t), 10 - 10 * cos(t), 10 + 5 * sin(t1), 10 - 5 * cos(t1), 10, 10, 10 + 5 * sin(t2), 10 - 5 * cos(t2));
-    }
-  }else if(graphicsId === 6){ // 星。
-    img.fill(255, 242, 0);
-    for(let k = 0; k < 5; k++){
-      let t = 2 * PI * k / 5;
-      let t1 = t - 2 * PI / 10;
-      let t2 = t + 2 * PI / 10;
-      img.triangle(10 + 10 * sin(t), 10 - 10 * cos(t), 10 + 5 * sin(t1), 10 - 5 * cos(t1), 10 + 5 * sin(t2), 10 - 5 * cos(t2));
-    }
-    img.ellipse(10, 10, 10, 10);
-  }
+  img.fill(palette[graphicsId]);
+  img.rect(2, 2, 16, 16);
 }
 
 // ここでmain→subの順にregistすればOK
 
 // 実践しましょうか
-function createPattern(){
+function createPattern0(){
+  // まず位置座標を用意して・・今扱ってるflowがそういうやつだからってだけだよ。
+  // flowによっては位置情報要求しないからね・・fromしか無かったりするし。
   let posX = arSeq(20, 50, 8).concat(arSeq(20, 50, 8));
   let posY = constSeq(50, 8).concat(constSeq(300, 8));
   let vecs = getVectors(posX, posY);
@@ -341,7 +339,7 @@ function createPattern(){
   all.registFlow(paramSet);
   all.convertList = [[8, 1], [9, 2], [10, 3], [11, 4], [12, 5], [13, 6], [14], [0], [15], [16], [17], [18], [19], [20], [21],
   [7], [15], [16], [17], [18], [19], [20]];
-  for(let i = 0; i < 22; i++){ all.flows[i].convertible = true;  }
+  //for(let i = 0; i < 22; i++){ all.flows[i].convertible = true;  } // めんどくさいからデフォルトtrueにして・・・
   for(let i = 0; i < 6; i++){ all.flows[i].convertFunc = equiv; }
   for(let i = 6; i < 22; i++){all.flows[i].convertFunc = simple; }
   // 生成ポイント
@@ -351,6 +349,19 @@ function createPattern(){
   all.registActor([0, 0, 0, 0, 0, 0, 0], [1, 1.5, 2, 2.5, 3, 3.5, 4], [0, 1, 2, 3, 4, 5, 6])
 }
 
+function createPattern1(){
+  let vecs = [];
+  for(let i = 0; i < 3; i++){
+    for(let k = 0; k < 3; k++){
+      vecs.push(createVector(50 + k * 100, 50 + i * 100));
+    }
+  }
+  let paramSet = getOrbitalFlows(vecs, [0, 1, 3, 1, 2, 4, 5, 6, 4, 5, 7, 8], [1, 2, 0, 4, 5, 3, 4, 3, 7, 8, 6, 7], 'straight');
+  paramSet.forEach(function(params){ params['factor'] = 1; });
+  all.registFlow(paramSet);
+  all.convertList = [[1, 3], [4], [0], [5, 8], [6, 9], [2], [5, 8], [2], [10], [11], [7], [10]];
+  all.registActor([0], [3], [0]);
+}
 
 // utility.
 function constSeq(c, n){
@@ -392,7 +403,7 @@ function getOrbitalFlows(vecs, fromIds, toIds, typename){
 
 // 各種代入関数
 function trivVoid(_flow, _actor){ return; }
-function triv(_flow, _actor){ return -1; }
+function triv(_flow, _actor){ return -1; } // デフォルトではすべてランダムコンバート、を表現したもの
 function simple(_flow, _actor){ return 0; }
 function equiv(_flow, _actor){
   if(_flow.index === _actor.visual.kind){ // 色が0, 1, ..., 6に応じてconvert.
