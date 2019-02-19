@@ -51,8 +51,8 @@ class flow{
     this.convertible = false; // デフォルト（convertできるところだけtrueにする）
     //this.params = {}; // convertに使うパラメータ（たとえば'simple'とか'random'とか指定）
     // paramsを廃止してみる
-    this.initialFunc = triv;
-    this.completeFunc = triv;
+    this.initialFunc = trivVoid;
+    this.completeFunc = trivVoid;
     this.convertFunc = triv;  // え？？
   }
   isConvertible(){ return this.convertible; }
@@ -164,8 +164,9 @@ class actor{
     // 自分を排除する
     let selfId;
     for(selfId = 0; selfId < all.actors.length; selfId++){
-      if(all.actors[selfId].id === this.index){ break; }
+      if(all.actors[selfId].index === this.index){ break; }
     }
+    console.log("selfId = %d", selfId);
     all.actors.splice(selfId, 1);
   }
 }
@@ -234,6 +235,7 @@ class entity{
   }
   getNextFlow(flowId, givenId){
     // console.log(givenId);
+    // givenIdが-1のときはランダム、具体的なときはそれを返す。そんだけ。
     let nextList = this.convertList[flowId];
     let nextId;
     if(givenId < 0){ nextId = nextList[randomInt(nextList.length)]; }
@@ -327,26 +329,11 @@ function inputGraphic(img, graphicsId){
 }
 
 // ここでmain→subの順にregistすればOK
-/*
-function createPattern(){
-  let posX = [100, 300, 300, 100];
-  let posY = [100, 100, 300, 300];
-  let vecs = getVectors(posX, posY);
-  let paramSet = getOrbitalFlows(vecs, [0, 1, 2], [1, 2, 3], 'straight');
-  paramSet.forEach(function(params){ params['factor'] = 1; });
-  all.registFlow(paramSet);
-  // パターンで指定することが増えたね。
-  // 1. convertListの初期設定
-  // 2. convert typeの設定、convert可能性の初期設定（たとえば行き止まりには指定しない）
-  all.convertList = [[1], [2], []];
-  for(let i = 0; i < 2; i++){ all.flows[i].convertFunc = simple; all.flows[i].convertible = true; }
-  all.registActor([0], [2], [6]);
-}*/
 
 // 実践しましょうか
 function createPattern(){
   let posX = arSeq(20, 50, 8).concat(arSeq(20, 50, 8));
-  let posY = constSeq(50, 8).concat(constSeq(100, 8));
+  let posY = constSeq(50, 8).concat(constSeq(300, 8));
   let vecs = getVectors(posX, posY);
   let paramSet = getOrbitalFlows(vecs, arSeq(0, 1, 7).concat([8, 1, 2, 3, 4, 5, 6, 7]).concat(arSeq(9, 1, 7)), arSeq(1, 1, 7).concat([0, 9, 10, 11, 12, 13, 14,
   15]).concat(arSeq(8, 1, 7)),'straight');
@@ -357,6 +344,10 @@ function createPattern(){
   for(let i = 0; i < 22; i++){ all.flows[i].convertible = true;  }
   for(let i = 0; i < 6; i++){ all.flows[i].convertFunc = equiv; }
   for(let i = 6; i < 22; i++){all.flows[i].convertFunc = simple; }
+  // 生成ポイント
+  for(let i = 16; i < 22; i++){ all.flows[i].completeFunc = generateActor; }
+  // 殺す処理
+  all.flows[15].completeFunc = killActor; // すげぇ。ほんとに消えやがったぜ。
   all.registActor([0, 0, 0, 0, 0, 0, 0], [1, 1.5, 2, 2.5, 3, 3.5, 4], [0, 1, 2, 3, 4, 5, 6])
 }
 
@@ -400,11 +391,18 @@ function getOrbitalFlows(vecs, fromIds, toIds, typename){
 }
 
 // 各種代入関数
+function trivVoid(_flow, _actor){ return; }
 function triv(_flow, _actor){ return -1; }
 function simple(_flow, _actor){ return 0; }
 function equiv(_flow, _actor){
-  if(_flow.index === _actor.visual.kind){
+  if(_flow.index === _actor.visual.kind){ // 色が0, 1, ..., 6に応じてconvert.
     return 0;
   }
   return 1;
 }
+function generateActor(_flow, _actor){ // actorの生成ポイント
+  if(all.actors.length >= 10){ return; }
+  all.registActor([0], [2 + randomInt(3)], [randomInt(7)]);
+  // これをいくつか配置しておいて踏むと0番にactorが生成する感じ
+}
+function killActor(_flow, _actor){ _actor.kill(); }
