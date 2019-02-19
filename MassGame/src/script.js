@@ -1,17 +1,17 @@
-// flowベースでの書き換えをする実験～～
+// Mass Game.
+// 36個でやる。一番多彩な表現が可能でかつもっとも少ないので。
+// oriented Flow(行先固定のイージングフロー)を使う。
+// 36個各々についてidで行先を管理すればフローは3つくらいで済む。（actorに配列を持たせる）
 
 'use strict';
 let all; // 全体
 let palette; // カラーパレット
-
-const PATTERN_NUM = 3;
 
 function setup(){
   createCanvas(400, 400);
   palette = [color(248, 155, 1), color(248, 230, 1), color(38, 248, 1), color(1, 248, 210), color(2, 9, 247), color(240, 2, 247), color(249, 0, 6)];
   all = new entity();
   all.initialize();
-  //console.log(palette);
 }
 
 function draw(){
@@ -445,82 +445,6 @@ function inputGraphic(img, graphicsId){
   img.rect(2, 2, 16, 16);
 }
 
-// ここでmain→subの順にregistすればOK
-
-// 実践しましょうか
-function createPattern0(){
-  // まず位置座標を用意して・・今扱ってるflowがそういうやつだからってだけだよ。
-  // flowによっては位置情報要求しないからね・・fromしか無かったりするし。
-  let posX = arSeq(20, 50, 8).concat(arSeq(20, 50, 8));
-  let posY = constSeq(50, 8).concat(constSeq(300, 8));
-  let vecs = getVectors(posX, posY);
-  let paramSet = getOrbitalFlow(vecs, arSeq(0, 1, 7).concat([8, 1, 2, 3, 4, 5, 6, 7]).concat(arSeq(9, 1, 7)), arSeq(1, 1, 7).concat([0, 9, 10, 11, 12, 13, 14,
-  15]).concat(arSeq(8, 1, 7)),'straight');
-  paramSet.forEach(function(params){ params['factor'] = 1; });
-  all.registFlow(paramSet);
-  all.convertList = [[8, 1], [9, 2], [10, 3], [11, 4], [12, 5], [13, 6], [14], [0], [15], [16], [17], [18], [19], [20], [21],
-  [7], [15], [16], [17], [18], [19], [20]];
-  // convertibleのデフォルトはtrueになりました。
-  for(let i = 0; i < 6; i++){ all.flows[i].convertFunc = equiv; } // flowと同じindexのballが曲がる
-  for(let i = 6; i < 22; i++){all.flows[i].convertFunc = simple; }
-  // 生成ポイント
-  for(let i = 16; i < 22; i++){ all.flows[i].completeFunc = generateActor; }
-  // 殺す処理
-  all.flows[15].completeFunc = killActor; // すげぇ。ほんとに消えやがったぜ。
-  all.registActor([0, 0, 0, 0, 0, 0, 0], [1, 1.5, 2, 2.5, 3, 3.5, 4], [0, 1, 2, 3, 4, 5, 6])
-}
-
-function createPattern1(){
-  // まずposXとposYからベクトルの列を。
-  let posX = arSinSeq(0, PI / 3, 6, 60, 200).concat(arSinSeq(0, PI / 3, 6, 120, 200)).concat([200]);
-  let posY = arCosSeq(0, PI / 3, 6, -60, 200).concat(arCosSeq(0, PI / 3, 6, -120, 200)).concat([200]);
-  let vecs = getVectors(posX, posY);
-  let fromList = [1, 2, 3, 4, 5, 0, 6, 7, 8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-  let toList = [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 6, 12, 12, 12, 12, 12, 12, 0, 1, 2, 3, 4, 5];
-  let paramSet = getOrbitalFlow(vecs, fromList, toList, 'straight');
-  paramSet.forEach(function(params){ params['factor'] = 1; });
-  let jumpfromList = constSeq(12, 6);
-  let jumptoList = arSeq(6, 1, 6);
-  paramSet = paramSet.concat(getOrbitalFlow(vecs, jumpfromList, jumptoList, 'jump'));
-  all.registFlow(paramSet);
-  all.registFlow([{type: 'assemble', limit: 6}]); // assembleHub. (31個目)
-  // 若干つなぎ方を変えようかな・・
-  all.convertList = [[5, 12], [0, 13], [1, 14], [2, 15], [3, 16], [4, 17], [7, 19], [8, 20], [9, 21], [10, 22], [11, 23], [6, 18], [30], [30], [30], [30], [30], [30], [5, 12], [0, 13], [1, 14], [2, 15], [3, 16], [4, 17], [6, 18], [7, 19], [8, 20], [9, 21], [10, 22], [11, 23], [24, 25, 26, 27, 28, 29]];
-  all.registActor([6, 7, 8, 9, 10, 11], [2, 2, 2, 2, 2, 2], [0, 1, 2, 3, 4, 5]);
-  // convertの仕方をいじりますか
-  all.flows[30].convertFunc = splitConvert; // まあ、色に応じて違う場所にとばしましょう。
-}
-
-function createPattern2(){
-  // simpleなやつ
-  let posX = [200, 300, 300, 300, 200, 100, 100, 100, 200];
-  let posY = [100, 100, 200, 300, 300, 300, 200, 100, 200];
-  let vecs = getVectors(posX, posY);
-  let fromList = [8, 8, 8, 8, 0, 1, 2, 3, 4, 5, 6, 7];
-  let toList = [0, 2, 4, 6, 1, 2, 3, 4, 5, 6, 7, 0];
-  let paramSet = getOrbitalFlow(vecs, fromList, toList, 'straight');
-  paramSet.forEach(function(params){ params['factor'] = 1; }); // allOneってオプション付けるか・・面倒臭くなってきた
-  all.registFlow(paramSet);
-  let otherSet = getShootingFlow(vecs, [0, 2, 4, 6], 'throw').concat(getShootingFlow(vecs, [1, 3, 5, 7], 'fall'));
-  let dx = [0, 5, 0, -5];
-  let dy = [-5, 0, 5, 0];
-  for(let i = 0; i < 4; i++){
-    otherSet[i]['v'] = createVector(dx[i], dy[i]);
-  }
-  for(let i = 4; i < 6; i++){
-    otherSet[i]['ax'] = 2; otherSet[i]['vy'] = 20;
-  }
-  for(let i = 6; i < 8; i++){
-    otherSet[i]['ax'] = -2; otherSet[i]['vy'] = 20;
-  }
-  all.registFlow(otherSet);
-  all.convertList = [[4, 12], [6, 13], [8, 14], [10, 15], [5, 16], [6, 13], [7, 17], [8, 14], [9, 18], [10, 15], [11, 19], [4, 12]];
-  all.registActor([0, 1, 2, 3], [1.5, 2, 1.5, 2], [1, 2, 3, 4]);
-  for(let i = 12; i < 20; i++){
-    all.flows[i].initialFunc = generateMultiActor;
-  }
-}
-
 //---------------------------------------------------------------------------------------//
 // utility.
 function typeSeq(typename, n){
@@ -594,30 +518,3 @@ function getShootingFlow(vecs, fromIds, typename){
 function trivVoid(_flow, _actor){ return; } // initializeとcomplete時のデフォルト。
 function triv(_flow, _actor){ return -1; } // デフォルトではすべてランダムコンバート、を表現したもの
 function simple(_flow, _actor){ return 0; }
-function equiv(_flow, _actor){
-  if(_flow.index === _actor.visual.kind){ // 色が0, 1, ..., 6に応じてconvert.
-    return 0;
-  }
-  return 1;
-}
-
-// 生成（10-limit）
-function generateActor(_flow, _actor){ // actorの生成ポイント
-  if(all.actors.length >= 10){ return; }
-  all.registActor([0], [2 + randomInt(3)], [randomInt(7)]);
-  // これをいくつか配置しておいて踏むと0番にactorが生成する感じ
-}
-
-function generateMultiActor(_flow, _actor){
-  if(all.actors.length >= 10){ return; }
-  let speeds = [];
-  let kinds = [];
-  for(let i = 0; i < 4; i++){ speeds.push(1 + random(2)); kinds.push(randomInt(7)); }
-  all.registActor([0, 1, 2, 3], speeds, kinds);
-}
-
-// 抹消
-function killActor(_flow, _actor){ _actor.kill(); }
-
-// 散開
-function splitConvert(_flow, _actor){ return _actor.visual.kind; } // これはactorのあれに依存してて・・まあいい。
