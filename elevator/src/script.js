@@ -16,7 +16,7 @@ let all; // 全体
 let palette; // カラーパレット
 
 function setup(){
-  createCanvas(400, 400);
+  createCanvas(800, 400);
   palette = [color(248, 155, 1), color(248, 230, 1), color(38, 248, 1), color(1, 248, 210), color(2, 9, 247), color(240, 2, 247), color(249, 0, 6)];
   all = new entity();
   all.initialize();
@@ -32,12 +32,6 @@ function draw(){
 function keyTyped(){
   if(key === 'p'){ noLoop(); }
   if(key === 'q'){ loop(); }
-}
-
-// バリエーションチェンジ
-function mouseClicked(){
-  let newIndex = (all.patternIndex + 1) % PATTERN_NUM;
-  all.switchPattern(newIndex);
 }
 
 // 簡単なものでいいです
@@ -79,7 +73,7 @@ class flow{
   initialize(_actor){ this.initialFunc(this, _actor); } // プロセス開始時の処理。たとえばstraightFlowならtimerのsettingとか
   // defaultAction(_actor){} // completeしたあとconvert出来ない時の処理（一定のペースで跳ねるとか？ぴょんぴょん）
   // エレベータの待ち時間とか表現するのに使えるかもしれない
-  execute(_actor){} // 処理の本体
+  execute(_actor){ _actor.isActive = false; } // デフォルトではisActiveをfalseにしておわり
   complete(_actor){ this.completeFunc(this, _actor); } // プロセス終了時の処理。たとえば_actor.kill()でここで終わったりとか
   // paramsに何か入れるときはここ↑に書いてください。params['id'] = '_actorの色のid' とか。
   convert(_actor){
@@ -88,35 +82,6 @@ class flow{
     _actor.state = nextFlow;
   } // allに頼んで次のflowを設定してもらう
   display(gr){} // line型なら線、hub型ならボックスとかそういうのを描画する用。
-}
-
-// hubです。位置情報とかはないです。あくまでflowをつなぐもの、位置はactorが持ってるので。
-class assembleHub extends flow{
-  // いくつか集まったら解放される。
-  constructor(lim){
-    super();
-    this.limit = lim;
-    this.volume = 0; // lim-1→limのときtrue, 1→0のときfalse.
-    this.convertible = false;
-  }
-  initialize(_actor){
-    this.initialFunc(this, _actor);
-    //console.log(this);
-    this.volume++;
-    //console.log(this.volume);
-    //console.log(this.limit);
-    if(this.volume >= this.limit){ this.convertible = true; }
-  }
-  execute(_actor){ _actor.isActive = false; } // やることないのでいきなりfalse.
-  // やったできた。簡単じゃないかー。
-  // convertFuncでvolumeと連携させれば「散開」も可能になるはず（ばーーってやつ）
-  convert(_actor){
-    let nextFlow = all.getNextFlow(this.index, this.convertFunc(this, _actor));
-    _actor.state = nextFlow;
-    //console.log(nextFlow);
-    this.volume--;
-    if(this.volume === 0){ this.convertible = false; } // 空になったら閉じる
-  }
 }
 
 // 始点と終点とspanからなりどこかからどこかへ行くことが目的のFlow.
@@ -154,21 +119,22 @@ class jumpFlow extends orbitalFlow{
 }
 
 class straightFlow extends orbitalFlow{
-  constructor(from, to, factor){
+  constructor(from, to){
     super(from, to);
+    console.log(78);
     this.span = p5.Vector.dist(from, to);
-    this.factor = factor; // 2なら2倍速とかそういう。
+    console.log(79);
   }
   getSpan(){
-    return this.span / this.factor;
+    return this.span;
   }
   execute(_actor){
     // ストレートフロー
     if(!_actor.timer.getState()){ return; } // 車の一時停止とかに使えそう
     _actor.timer.step();
     let cnt = _actor.timer.getCnt();
-    _actor.pos.x = map(cnt, 0, this.span / this.factor, this.from.x, this.to.x);
-    _actor.pos.y = map(cnt, 0, this.span / this.factor, this.from.y, this.to.y);
+    _actor.pos.x = map(cnt, 0, this.span, this.from.x, this.to.x);
+    _actor.pos.y = map(cnt, 0, this.span, this.from.y, this.to.y);
     if(!_actor.timer.getState()){ _actor.isActive = false; } // タイマーが切れたらnon-Activeにする
   }
   display(gr){
@@ -184,58 +150,6 @@ class straightFlow extends orbitalFlow{
     gr.fill(0);
     gr.triangle(0, arrowSize / 2, 0, -arrowSize / 2, arrowSize, 0);
     gr.pop();
-  }
-}
-
-// actorを画面外にふっとばす
-class shootingFlow extends flow{
-  constructor(from){
-    super();
-    this.from = from;
-  }
-  initialize(_actor){
-    this.initialFunc(this, _actor)
-    _actor.pos.set(this.from.x, this.from.y);
-    _actor.timer.setting(-1, _actor.speed); // 画面外に出たらactorをkillするので無限カウントで
-  }
-  static eject(_actor){
-    // 画面外に出たら抹殺(isActiveはそのままでいい)
-    if(_actor.pos.x > width || _actor.pos.x < 0 || _actor.pos.y < 0 || _actor.pos.y > height){
-      _actor.kill(); // 画面外に出たら消える
-    }
-  }
-}
-
-// 放物線を描きながら画面外に消えていく
-class fallFlow extends shootingFlow{
-  constructor(from, ax, vy){
-    super(from);
-    this.ax = ax;
-    this.vy = vy; // 加速度ax, 初期速度vy.
-  }
-  execute(_actor){
-    if(!_actor.timer.getState()){ return; }
-    _actor.timer.step();
-    let cnt = _actor.timer.getCnt();
-    _actor.pos.x += this.ax;
-    _actor.pos.y += (cnt - this.vy) / 10;
-    shootingFlow.eject(_actor);
-  }
-}
-
-// 直線的に動きながら消滅
-class throwFlow extends shootingFlow{
-  constructor(from, v){
-    super(from);
-    this.v = v; // 大きさ正規化しないほうが楽しいからこれでいいや
-  }
-  execute(_actor){
-    if(!_actor.timer.getState()){ return; }
-    _actor.timer.step();
-    let cnt = _actor.timer.getCnt();
-    _actor.pos.x += this.v.x * _actor.speed; // ベクトルvの方向にばひゅーん
-    _actor.pos.y += this.v.y * _actor.speed;
-    shootingFlow.eject(_actor);
   }
 }
 
@@ -292,7 +206,7 @@ class actor{
 
 // 色や形を与えられたactor. ビジュアル的に分かりやすいので今はこれしか使ってない。
 class movingActor extends actor{
-  constructor(f, speed = 1, kind = 0){
+  constructor(f, speed, kind){
     super(f);
     this.pos = createVector(0, 0); // flowが始まれば勝手に・・って感じ。
     this.visual = new rollingFigure(kind); // 回転する図形
@@ -302,11 +216,7 @@ class movingActor extends actor{
     this.visual.display(this.pos);
   }
 }
-
-// 正直、actorの原型を作ってその継承としてmovingActor(従来のActor)を改めて定めることの利点がよく分からない
-// けどね。まあ応用が利くという意味では・・でもflowの継承ああいう風にしちゃったから、それに随伴する形で・・
-// いや、movingActorが多彩なflowに随伴しているのか？まあ、見栄え大事だし、でもこのシステムは見栄えがすべて
-// ではないはずなのよね。まだよく分かんないのだけど。
+// actorにやらせる必要ないや・・
 
 actor.index = 0; // 0, 1, 2, 3, ....
 
@@ -353,15 +263,13 @@ class entity{
     this.addFlows = [];  // 動かすflowからなる配列
     this.convertList = [];
     this.actors = [];
-    this.patternIndex = 0; // うまくいくのかな・・
-    this.patternArray = [createPattern0, createPattern1, createPattern2];
   }
   getFlow(index){
     return this.flows[index];
   }
   initialize(){
-    this.patternArray[this.patternIndex]();
-    //console.log(this.convertList);
+    createPattern(); // ここでパターンを作る
+    console.log("getNextFlow");
     this.baseFlows.forEach(function(f){ f.display(this.base); }, this); // ベースグラフの初期化（addは毎ターン）
   }
   reset(){
@@ -376,11 +284,6 @@ class entity{
     flow.index = 0;
     actor.index = 0;
   }
-  switchPattern(newIndex){
-    this.reset();
-    this.patternIndex = newIndex;
-    this.initialize(); // これだけか。まぁhub無くなったしな。
-  }
   getNextFlow(flowId, givenId){
     // givenIdが-1のときはランダム、具体的なときはそれを返す。そんだけ。
     let nextList = this.convertList[flowId];
@@ -393,6 +296,7 @@ class entity{
     return this.getFlow(nextId);
   }
   registActor(flowIds, speeds, kinds){
+    console.log("registActor");
     // flowはメソッドでidから取得。
     for(let i = 0; i < flowIds.length; i++){
       let f = this.getFlow(flowIds[i]);
@@ -417,7 +321,8 @@ class entity{
   }
   static createFlow(params){
     if(params['type'] === 'straight'){
-      return new straightFlow(params['from'], params['to'], params['factor']);
+      console.log('straight');
+      return new straightFlow(params['from'], params['to']);
     }else if(params['type'] === 'jump'){
       return new jumpFlow(params['from'], params['to']);
     }else if(params['type'] === 'assemble'){
@@ -426,6 +331,8 @@ class entity{
       return new fallFlow(params['from'], params['ax'], params['vy']);
     }else if(params['type'] === 'throw'){
       return new throwFlow(params['from'], params['v']);
+    }else if(params['type'] === 'simple'){
+      return new flow(); //
     }
   }
   update(){
@@ -437,7 +344,7 @@ class entity{
     image(this.base, 0, 0);
     if(this.addFlows.length > 0){ // 付加的な要素は毎フレーム描画し直す感じで
       this.additive.clear();
-      this.addFlows.forEach(function(f){ f.display(this.additive); })
+      this.addFlows.forEach(function(f){ f.display(this.additive); }, this)
       image(this.additive, 0, 0); // 忘れてた、これ無かったら描画されないじゃん
     }
     this.actors.forEach(function(_actor){ // actorの描画
@@ -451,6 +358,27 @@ function inputGraphic(img, graphicsId){
   img.noStroke();
   img.fill(palette[graphicsId]);
   img.rect(2, 2, 16, 16);
+}
+
+// パターン作り
+function createPattern(){
+  let posX = multiSeq(arSeq(80, 80, 3), 4);
+  let posY = constSeq(80, 3).concat(constSeq(160, 3)).concat(constSeq(240, 3)).concat(constSeq(320, 3));
+  let vecs = getVectors(posX, posY);
+  let paramSet = getOrbitalFlow(vecs, [1, 1, 0, 4, 2, 3, 5, 7, 7, 6, 10, 8, 9, 11], [0, 2, 3, 1, 5, 4, 4, 6, 8, 9, 7, 11, 10, 10], 'straight');
+  console.log("222");
+  all.registFlow(paramSet);
+  console.log("444");
+  console.log(333);
+  let subParamSet = getOrbitalFlow([createVector(240, 320), createVector(320, 320)], [0, 1], [1, 0], 'straight');
+  all.registFlow(subParamSet, false); // addFlowに入ったので毎ターン描画
+  vecs = getVectors([400, 520, 520, 400], [160, 160, 320, 320]);
+  paramSet = getOrbitalFlow(vecs, [0, 1, 2, 3], [1, 2, 3, 0], 'straight');
+  all.registFlow(paramSet);
+  // ハブ
+  all.registFlow([{type:'simple', type:'simple'}]);
+  all.convertList = [[2], [4], [5], [0, 1], [20], [3], [3], [9], [11], [12], [7, 8], [21], [10], [10], [15], [21, 20], [17], [18], [19], [16], [6], [13, 14]];
+  all.registActor([9], [2], [0]);
 }
 
 //---------------------------------------------------------------------------------------//
@@ -467,6 +395,15 @@ function constSeq(c, n){
   let array = [];
   for(let i = 0; i < n; i++){ array.push(c); }
   return array;
+}
+
+function multiSeq(array, m){
+  // arrayがm個。
+  let newArray = [];
+  for(let k = 0; k < m; k++){
+    array.forEach(function(x){ newArray.push(x); })
+  }
+  return newArray;
 }
 
 function arSeq(start, interval, n){
@@ -508,15 +445,6 @@ function getOrbitalFlow(vecs, fromIds, toIds, typename){
   let paramSet = [];
   for(let i = 0; i < fromIds.length; i++){
     let dict = {type: typename, from: vecs[fromIds[i]], to: vecs[toIds[i]]};
-    paramSet.push(dict);
-  }
-  return paramSet;
-}
-
-function getShootingFlow(vecs, fromIds, typename){
-  let paramSet = [];
-  for(let i = 0; i < fromIds.length; i++){
-    let dict = {type: typename, from: vecs[fromIds[i]]};
     paramSet.push(dict);
   }
   return paramSet;
