@@ -50,7 +50,8 @@ class counter{
   }
   step(){
     this.cnt += this.diff;
-    if(this.cnt > this.limit && this.limit > 0){ this.isOn = false; } // 忘れてたーーー -1だとあれ。
+    if(this.cnt > this.limit && this.limit > 0){ this.isOn = false; } // 忘れてたーーー -1だとあれ。無限に処理する。
+    // diff廃止すれば0渡すだけでよくなる。limitは1とかにして、そうすればthis.limit>0なんていう変な書き方しなくてよくなる。
   }
   pause(){ this.isOn = !this.isOn; } // ポーズ要るかどうか
 }
