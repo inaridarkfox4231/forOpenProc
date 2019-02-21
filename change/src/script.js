@@ -4,7 +4,7 @@
 let all; // 全体
 let palette; // カラーパレット
 
-const PATTERN_NUM = 3;
+const PATTERN_NUM = 5;
 const IDLE = 0;
 const IN_PROGRESS = 1;
 const COMPLETED = 2;
@@ -54,7 +54,7 @@ class counter{
     this.cnt += diff; // カウンターはマイナスでもいいんだよ
     return false; // 統一性
   }
-} // limitは廃止（使う側が何とかしろ）
+} // limitは廃止（使う側が何とかしろ）（てかもうクラスにする意味ないやんな）
 
 class loopCounter extends counter{ // ぐるぐるまわる
   constructor(period){ // periodは正にしてね
@@ -234,7 +234,7 @@ class fallFlow extends shootingFlow{
   constructor(speed, distance, maxHeight){ // 速さ、水平最高点到達距離、垂直最高点到達距離
     super();
     this.vx = speed; // 水平初速度
-    this.vy = 2 * speed * maxHeight / distance; // 垂直初速度
+    this.vy = 2 * abs(speed) * maxHeight / distance; // 垂直初速度
     this.gravity = 2 * pow(speed / distance, 2) * maxHeight; // 重力加速度
   }
   execute(_actor){
@@ -307,7 +307,7 @@ class actor{
 class movingActor extends actor{
   constructor(f = undefined, speed = 1, kind = 0){
     super(f);
-    this.pos = createVector(0, 0); // flowが始まれば勝手に・・って感じ。
+    this.pos = createVector(-100, -100); // flowが始まれば勝手に・・って感じ。
     this.visual = new rollingFigure(kind); // 回転する図形
     this.speed = speed; // 今の状況だとスピードも要るかな・・クラスとして分離するかは要相談（composition）
   }
@@ -386,33 +386,35 @@ class inActivateGimic extends Gimic{
     super(myFlowId);
   }
   action(_actor){
-    _actor.inActivate(); // inActivateするだけ
+    _actor.inActivate(); // 踏んだ人をinActivateするだけ
+    //console.log(_actor.isActive);
   }
 }
 
 class activateGimic extends Gimic{
-  constructor(myFlowId, targteActorId){
+  constructor(myFlowId, targetActorId){
     super(myFlowId);
     this.targetActorId = targetActorId;
   }
   action(_actor){
-    this.targetActorId.activate(); // ターゲットをactivateする
+    all.getActor(this.targetActorId).activate(); // ターゲットをactivateする
   }
 }
 
 // targetFlowIdのところは-1でallRandomにしたり、
 // 範囲指定してその中からランダムで選ばれるようにしても面白そうだ。
 class generateGimic extends Gimic{
-  constructor(myFlowId, targetFlowId, targetColor = -1){
+  constructor(myFlowId, targetFlowId, targetColor = -1, limit = 10){
     super(myFlowId);
     this.targetFlowId = targetFlowId; // どこのflowに出現させるか
     this.targetColor = targetColor; // 色指定。-1のときはランダム
+    this.limit = limit; // 限界値（たとえば10なら10匹以上にはしない）
   }
   action(_actor){
-    if(all.actors.length >= 10){ return; }
+    if(all.actors.length >= this.limit){ return; }
     let setColor = this.targetColor;
     if(setColor < 0){ setColor = randomInt(7); } // -1のときはランダム
-    let newActor = new actor(all.flows[this.targetFlowId], 2 + randomInt(3), setColor);
+    let newActor = new movingActor(all.flows[this.targetFlowId], 2 + randomInt(3), setColor);
     newActor.activate();
     all.actors.push(newActor);
   }
@@ -435,11 +437,20 @@ class entity{
     this.actors = [];
     this.initialGimic = [];  // flow開始時のギミック
     this.completeGimic = []; // flow終了時のギミック
-    this.patternIndex = 0; // うまくいくのかな・・
-    this.patternArray = [createPattern0, createPattern1, createPattern2];
+    this.patternIndex = 4; // うまくいくのかな・・
+    this.patternArray = [createPattern0, createPattern1, createPattern2, createPattern3, createPattern4];
   }
-  getFlow(index){
-    return this.flows[index];
+  getFlow(givenIndex){
+    for(let i = 0; i < this.flows.length; i++){
+      if(this.flows[i].index === givenIndex){ return this.flows[i]; break; }
+    }
+    return undefined; // forEachだとreturnで終わってくれないことを知った
+  }
+  getActor(givenIndex){
+    for(let i = 0; i < this.actors.length; i++){
+      if(this.actors[i].index === givenIndex){ return this.actors[i]; break; }
+    }
+    return undefined;
   }
   initialize(){
     this.patternArray[this.patternIndex]();
@@ -468,9 +479,11 @@ class entity{
   }
   registActor(flowIds, speeds, kinds){
     // flowはメソッドでidから取得。
+    //console.log(this.flows);
     for(let i = 0; i < flowIds.length; i++){
       let f = this.getFlow(flowIds[i]);
       let newActor = new movingActor(f, speeds[i], kinds[i])
+      //console.log(newActor);
       // newActor.initialize(); // ここで初期化しません
       this.actors.push(newActor);
     }
@@ -487,17 +500,17 @@ class entity{
       }
     }, this);
   }
-  registNextFlow(index, nextIndexList){
+  connect(index, nextIndexList){
     // index番のflowの行先リストをnextIndexListによって作る
     nextIndexList.forEach(function(nextIndex){
-      this.flows[index].convertList.push(this.flows[nextIndex]);
+      this.getFlow(index).convertList.push(this.getFlow(nextIndex));
     }, this)
   }
-  registNextFlowMulti(indexList, nextIndexListArray){
+  connectMulti(indexList, nextIndexListArray){
     // IndexListに書かれたindexのflowにまとめて指定する
     // たとえば[6, 7, 8], [[2], [3], [4, 5]] ってやると6に2, 7に3, 8に4, 5が指定される
     for(let i = 0; i < indexList.length; i++){
-      this.registNextFlow(indexList[i], nextIndexListArray[i]);
+      this.connect(indexList[i], nextIndexListArray[i]);
     }
   }
   static createFlow(params){
@@ -562,7 +575,7 @@ function createPattern0(){
   let vecs = getVector([100, 100, 300, 300], [100, 300, 300, 100]);
   let paramSet = getOrbitalFlow(vecs, [0, 1, 2, 3], [1, 2, 3, 0], 'straight');
   all.registFlow(paramSet);
-  all.registNextFlowMulti([0, 1, 2, 3], [[1], [2], [3], [0]]);
+  all.connectMulti([0, 1, 2, 3], [[1], [2], [3], [0]]);
   all.registActor([0], [2], [0]);
   all.activateAll();
   // 3番にkillを放り込んでみる
@@ -578,15 +591,13 @@ function createPattern1(){
   let paramSet = getOrbitalFlow(vecs, [1, 1, 0, 4, 2, 4, 4, 3, 7, 5, 6, 8], [0, 2, 3, 1, 5, 3, 5, 6, 4, 8, 7, 7], 'straight');
   paramSet.push({type:'assemble', limit: 3});
   all.registFlow(paramSet);
-  all.registNextFlowMulti([0, 1, 2, 3, 4, 5], [[2], [4], [7], [0, 1], [9], [7]]);
+  all.connectMulti([0, 1, 2, 3, 4, 5], [[2], [4], [7], [0, 1], [9], [7]]);
   let additional = getOrbitalFlow(vecs, [6, 10, 8, 9, 11], [9, 7, 11, 10, 10], 'jump');
   all.registFlow(additional);
-  all.registNextFlowMulti([6, 7, 8, 9, 10, 11, 12], [[9], [10, 13], [12], [11, 15], [8], [8], [3, 5, 6]]);
-  all.registNextFlowMulti([13, 14, 15, 16, 17], [[16], [8], [17], [14], [14]]);
-  //console.log(all.flows[7]);
+  all.connectMulti([6, 7, 8, 9, 10, 11, 12], [[9], [10, 13], [12], [11, 15], [8], [8], [3, 5, 6]]);
+  all.connectMulti([13, 14, 15, 16, 17], [[16], [8], [17], [14], [14]]);
   all.registActor([3, 5, 6], [2, 2, 2], [0, 1, 2]);
   all.activateAll();
-  //all.flows.forEach(function(f){console.log(f.index);})
 }
 // generateHubとkillHub作りたい
 // 色に合わせてconvertも作りたいけど明日にしよ
@@ -595,26 +606,59 @@ function createPattern2(){
   let posX = [60].concat(constSeq(120, 5)).concat(constSeq(180, 5)).concat([240, 300]);
   let posY = [180].concat(arSeq(60, 60, 5)).concat(arSeq(60, 60, 5)).concat([180, 180]);
   let vecs = getVector(posX, posY);
-  console.log(vecs);
+
   let paramSet = getOrbitalFlow(vecs, [0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 8, 11], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'straight');
-  console.log("How?");
+
   all.registFlow(paramSet);
   let throwSet = typeSeq('throw', 4);
   let vSet = [createVector(1, 1), createVector(1, 1), createVector(1, -1), createVector(1, -1)];
-  console.log("Where?");
+
   for(let i = 0; i < 4; i++){ throwSet[i]['v'] = vSet[i]; }
-  console.log("What?");
+
   let fallSet = typeSeq('fall', 3);
   let dataSet = [[1, 30, 60], [1, 60, 120], [2, 60, 60]];
   for(let i = 0; i < 3; i++){ fallSet[i]['speed'] = dataSet[i][0]; fallSet[i]['distance'] = dataSet[i][1]; fallSet[i]['height'] = dataSet[i][2]; }
   all.registFlow(throwSet.concat(fallSet));
-  all.registNextFlowMulti(arSeq(0, 1, 12), [[5], [6], [7], [8], [9], [12], [13], [10, 16], [14], [15], [11, 17], [18]]);
+  all.connectMulti(arSeq(0, 1, 12), [[5], [6], [7], [8], [9], [12], [13], [10, 16], [14], [15], [11, 17], [18]]);
   all.registActor([0, 1, 2, 3, 4, 2, 2], [2, 2, 2, 2, 2, 2, 2], [0, 1, 2, 3, 4, 5, 6]);
   all.activateAll();
 }
 
 function createPattern3(){
   // generateHubの実験。
+  let posX = [160, 120, 200, 80, 160, 240, 40, 120, 200, 280, 80, 160, 240, 120, 200, 160, 120, 200];
+  for(let i = 0; i < 18; i++){ posX[i] += 160; }
+  let posY = [40, 80, 80, 120, 120, 120, 160, 160, 160, 160, 200, 200, 200, 240, 240, 280, 320, 320];
+  let vecs = getVector(posX, posY);
+
+  let paramSet = getOrbitalFlow(vecs, [0, 2, 1, 1, 4, 5, 3, 7, 4, 8, 5, 9, 6, 10, 7, 11, 8, 12, 10, 11, 14, 14, 13, 15, 16], [1, 0, 3, 4, 2, 2, 6, 3, 7, 4, 8, 5, 10, 7, 11, 8, 12, 9, 13, 13, 11, 12, 15, 14, 17], 'straight');
+  all.registFlow(paramSet);
+  all.registFlow([{type:'fall', speed:-2, distance:60, height:60}, {type:'fall', speed:2, distance:60, height:60}]);
+  all.connectMulti(arSeq(0, 1, 25), [[2, 3], [0], [6], [4, 8], [1], [1], [12, 25], [6], [7, 14], [4, 8], [9, 16], [5, 10], [18, 13], [7, 14], [15, 19], [9, 16], [17], [11, 26], [22], [22], [15, 19], [17], [23], [20, 21], [24]]);
+  all.registActor([8, 9, 14, 15, 24], [2, 2, 2, 2, 1], [0, 1, 2, 3, 6]);
+  all.activateAll();
+  all.completeGimic.push(new generateGimic(24, 0)); // 24の完了時に0に発生させる
+}
+
+function createPattern4(){
+  // activate, inactivateの実験。
+  let posX = [100, 340, 340, 100, 180, 260, 260, 180];
+  let posY = [100, 100, 340, 340, 180, 180, 260, 260];
+  let vecs = getVector(posX, posY);
+  let paramSet = getOrbitalFlow(vecs, [0, 1, 2, 3, 4, 5, 6, 7], [1, 2, 3, 0, 5, 6, 7, 4], 'straight');
+
+  all.registFlow(paramSet);
+  all.connectMulti([0, 1, 2, 3, 4, 5, 6, 7], [[1], [2], [3], [0], [5], [6], [7], [4]]);
+
+  all.registActor([0, 4], [1, 3], [0, 1]);
+  all.activateAll();
+
+  for(let i = 4; i <= 7; i++){
+    all.completeGimic.push(new inActivateGimic(i));
+  }
+  for(let i = 0; i <= 3; i++){
+    all.completeGimic.push(new activateGimic(i, 1));
+  }
 }
 
 // --------------------------------------------------------------------------------------- //
@@ -636,7 +680,7 @@ function constSeq(c, n){
 function jointSeq(arrayOfArray){
   // 全部繋げる
   let array = arrayOfArray[0];
-  console.log(array);
+  //console.log(array);
   for(let i = 1; i < arrayOfArray.length; i++){
     array = array.concat(arrayOfArray[i]);
   }
