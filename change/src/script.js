@@ -20,9 +20,16 @@ function setup(){
 
 function draw(){
   background(220);
-  all.update();
+  all.update(); // updateする
+  all.initialGimicAction();  // 初期化前ギミックチェック
+  all.completeGimicAction(); // 完了時ギミックチェック
   all.draw();
 }
+// updateしてからGimicをチェックすると、例えばこういうことが起きる。
+// まず、completeGimicでinActivateするやつを作ると、それを踏んだactorの動きが止まる。
+// インターバルの後、それを解放する何かしらのGimicが発動したとすると、その優先度が最後（後ろの方に配置する）なら、
+// そのあとすぐupdateに行くから解放される。これが逆だと、解放した直後に再びGimicが発動して
+// 動きが止まってしまうので、配置順がすごく大事。
 
 // デバッグ用
 function keyTyped(){
@@ -45,6 +52,7 @@ class counter{
   reset(){ this.cnt = 0; }
   step(diff = 1){
     this.cnt += diff; // カウンターはマイナスでもいいんだよ
+    return false; // 統一性
   }
 } // limitは廃止（使う側が何とかしろ）
 
@@ -55,20 +63,29 @@ class loopCounter extends counter{ // ぐるぐるまわる
   }
   step(diff = 1){
     this.cnt += diff;
-    if(this.cnt > this.period){ this.cnt -= this.period; }
+    if(this.cnt > this.period){ this.cnt -= this.period; return true; }
+    return false; // 周回時にtrueを返す（何か処理したいときにどうぞ）
   }
 }
 class reverseCounter extends counter{ // いったりきたり
   constructor(interval){
     super();
     this.interval = interval;
-    this.upward = true; // falseのときは正の数を与えると下がります。常に正の数を与え続けることができます。
+    this.signature = 1; // 符号
   }
   step(diff = 1){
     // diffは常に正オッケーです。
-    this.cnt += diff * (this.upward ? 1 : -1);
-    if(this.cnt > this.interval){ this.cnt = 2 * this.interval - this.cnt; }
-    else if(this.cnt < 0){ this.cnt = -this.cnt; }
+    this.cnt += diff * this.signature;
+    if(this.cnt > this.interval){
+      this.cnt = 2 * this.interval - this.cnt;
+      this.signature *= -1;
+      return true;
+    }else if(this.cnt < 0){
+      this.cnt = -this.cnt;
+      this.signature *= -1;
+      return true;
+    }
+    return false; // 折り返すときにtrueを返す
   }
 }
 
@@ -263,17 +280,18 @@ class actor{
   // entityの側でまとめてactivate, inActivateすればまとめて動きを止めることも・・・・
   update(){
     if(!this.isActive){ return; } // activeじゃないなら何もすることはない。
+    // initialActionが入るのはここ
     if(this.state === IDLE){
       this.currentFlow.initialize(this); // flowに初期化してもらう
       this.setState(IN_PROGRESS);
     }
     if(this.state === IN_PROGRESS){
       this.currentFlow.execute(this); // 実行！この中で適切なタイミングでsetState(COMPLETED)してもらうの
-    }
-    if(this.state === COMPLETED){
+    }else if(this.state === COMPLETED){
       this.setState(IDLE);
       this.currentFlow.convert(this); // ここで行先が定められないと[IDLEかつundefined]いわゆるニートになります（おい）
     }
+    // IN_PROGRESSのあとすぐにCOMPLETEDにしないことでactionをはさむ余地を与える
   }
   kill(){
     // 自分を排除する
@@ -335,6 +353,76 @@ class rollingFigure extends figure{
   }
 }
 
+// flowの開始時、終了時に何かさせたいときの処理
+// initialはflowのinitializeの直前、completeはflowの完了直後に発動する
+class Gimic{
+  constructor(myFlowId){
+    this.myFlowId = myFlowId; // どこのflowの最初や最後でいたずらするか
+  }
+  action(_actor){ return; };
+  initialCheck(_actor, flowId){
+    if(_actor.state === IDLE && _actor.isActive && flowId === this.myFlowId){ return true; }
+    return false;
+  }
+  completeCheck(_actor, flowId){
+    if(_actor.state === COMPLETED && _actor.isActive && flowId === this.myFlowId){ return true; }
+    return false;
+  }
+}
+
+// killするだけ
+class killGimic extends Gimic{
+  constructor(myFlowId){
+    super(myFlowId);
+  }
+  action(_actor){
+    _actor.inActivate();
+    _actor.kill();
+  }
+}
+
+class inActivateGimic extends Gimic{
+  constructor(myFlowId){
+    super(myFlowId);
+  }
+  action(_actor){
+    _actor.inActivate(); // inActivateするだけ
+  }
+}
+
+class activateGimic extends Gimic{
+  constructor(myFlowId, targteActorId){
+    super(myFlowId);
+    this.targetActorId = targetActorId;
+  }
+  action(_actor){
+    this.targetActorId.activate(); // ターゲットをactivateする
+  }
+}
+
+// targetFlowIdのところは-1でallRandomにしたり、
+// 範囲指定してその中からランダムで選ばれるようにしても面白そうだ。
+class generateGimic extends Gimic{
+  constructor(myFlowId, targetFlowId, targetColor = -1){
+    super(myFlowId);
+    this.targetFlowId = targetFlowId; // どこのflowに出現させるか
+    this.targetColor = targetColor; // 色指定。-1のときはランダム
+  }
+  action(_actor){
+    if(all.actors.length >= 10){ return; }
+    let setColor = this.targetColor;
+    if(setColor < 0){ setColor = randomInt(7); } // -1のときはランダム
+    let newActor = new actor(all.flows[this.targetFlowId], 2 + randomInt(3), setColor);
+    newActor.activate();
+    all.actors.push(newActor);
+  }
+}
+
+// Colosseoっていう、いわゆる紅白戦みたいなやつ作りたいんだけど。なんか、互いに殺しあってどっちが勝つとか。
+// HP設定しといて、攻撃と防御作って、色々。その時にこれで、
+// 攻撃や防御UP,DOWN, HP増減、回復、色々。まあ回復はHub..HubにGimic配置してもいいし。
+// そういうのに使えそうね。
+
 // flowのupdateとかやりたいわね
 // 使い終わったactorの再利用とかしても面白そう（他のプログラムでやってね）（trash）
 class entity{
@@ -345,7 +433,9 @@ class entity{
     this.baseFlows = []; // baseのflowの配列
     this.addFlows = [];  // 動かすflowからなる配列    // これをupdateすることでflowを動かしたいんだけど
     this.actors = [];
-    this.patternIndex = 2; // うまくいくのかな・・
+    this.initialGimic = [];  // flow開始時のギミック
+    this.completeGimic = []; // flow終了時のギミック
+    this.patternIndex = 0; // うまくいくのかな・・
     this.patternArray = [createPattern0, createPattern1, createPattern2];
   }
   getFlow(index){
@@ -364,6 +454,8 @@ class entity{
     this.actors = [];
     flow.index = 0; // 通し番号リセット
     actor.index = 0;
+    this.initialGimic = [];
+    this.completeGimic = [];
   }
   activateAll(){ // まとめてactivate.
     this.actors.forEach(function(_actor){ _actor.activate(); }, this);
@@ -421,6 +513,22 @@ class entity{
       return new throwFlow(params['v']); // fromは廃止
     }
   }
+  initialGimicAction(){
+    if(this.initialGimic.length === 0){ return; }
+    this.initialGimic.forEach(function(g){
+      this.actors.forEach(function(a){
+        if(g.initialCheck(a, a.currentFlow.index)){ g.action(a); }
+      })
+    }, this)
+  }
+  completeGimicAction(){
+    if(this.completeGimic.length === 0){ return; }
+    this.completeGimic.forEach(function(g){
+      this.actors.forEach(function(a){
+        if(g.completeCheck(a, a.currentFlow.index)){ g.action(a); }
+      })
+    }, this)
+  }
   update(){
     this.actors.forEach(function(_actor){
       _actor.update(); // flowもupdateしたいんだけどね
@@ -454,9 +562,12 @@ function createPattern0(){
   let vecs = getVector([100, 100, 300, 300], [100, 300, 300, 100]);
   let paramSet = getOrbitalFlow(vecs, [0, 1, 2, 3], [1, 2, 3, 0], 'straight');
   all.registFlow(paramSet);
-  all.registNextFlowMulti([0, 1, 2, 3], [[1], [2], [3], []]);
+  all.registNextFlowMulti([0, 1, 2, 3], [[1], [2], [3], [0]]);
   all.registActor([0], [2], [0]);
   all.activateAll();
+  // 3番にkillを放り込んでみる
+  all.initialGimic.push(new killGimic(1)); // うまくいってるみたい
+  all.completeGimic.push(new killGimic(3));
 }
 
 function createPattern1(){
@@ -500,6 +611,10 @@ function createPattern2(){
   all.registNextFlowMulti(arSeq(0, 1, 12), [[5], [6], [7], [8], [9], [12], [13], [10, 16], [14], [15], [11, 17], [18]]);
   all.registActor([0, 1, 2, 3, 4, 2, 2], [2, 2, 2, 2, 2, 2, 2], [0, 1, 2, 3, 4, 5, 6]);
   all.activateAll();
+}
+
+function createPattern3(){
+  // generateHubの実験。
 }
 
 // --------------------------------------------------------------------------------------- //
