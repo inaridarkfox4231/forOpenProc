@@ -4,13 +4,14 @@
 let all; // 全体
 let palette; // カラーパレット
 
-const PATTERN_NUM = 1;
+const PATTERN_NUM = 3;
 const IDLE = 0;
 const IN_PROGRESS = 1;
 const COMPLETED = 2;
 
 function setup(){
-  createCanvas(400, 600);
+  createCanvas(600, 600);
+  // palette HSBでやってみたい
   palette = [color(248, 155, 1), color(248, 230, 1), color(38, 248, 1), color(1, 248, 210), color(2, 9, 247), color(240, 2, 247), color(249, 0, 6)];
   all = new entity();
   all.initialize();
@@ -94,6 +95,7 @@ class flow{
     }else{
       _actor.setFlow(this.convertList[this.nextFlowIndex]);
     } // 次のflowが与えられるならそのままisActive継続、次の処理へ。
+    // わざとこのあとinActivateにして特定の条件下でactivateさせても面白そう。
   }
   display(gr){} // 一応書いておかないと不都合が生じそうだ
 }
@@ -119,6 +121,15 @@ class assembleHub extends flow{
     } // 開いてるなら行って良し
   }
 }
+
+class killHub extends flow{
+  // 殺すだけ
+  constructor(){ super(); }
+  execute(_actor){ _actor.kill(); } // おわり。ギミック処理もできるけどflowにすればvisualも定められるし（位置情報が必要）
+} // 位置やビジュアルを設けるかどうかは個別のプログラムに任せましょう
+
+// generateHubは特定のフローに・・あーどうしよかな。んー。。
+// こういうの、なんか別の概念が必要な気がする。convertしないからさ。違うでしょって話。
 
 // 始点と終点とspanからなりどこかからどこかへ行くことが目的のFlow.
 // 対象はmovingActorを想定しているのでposとか持ってないとエラーになります。
@@ -172,7 +183,7 @@ class straightFlow extends orbitalFlow{
     _actor.pos.y = map(progress, 0, 1, this.from.y, this.to.y);
   }
   display(gr){
-    // 線を引くだけです
+    // 線を引くだけです（ビジュアル要らないならなんかオプション付けてね・・あるいは、んー）
     gr.push();
     gr.strokeWeight(1.0);
     gr.line(this.from.x, this.from.y, this.to.x, this.to.y);
@@ -201,19 +212,19 @@ class shootingFlow extends flow{
   }
 }
 
-// 放物線を描きながら画面外に消えていく
+// 放物線を描きながら画面外に消えていく。物理、すごい・・
 class fallFlow extends shootingFlow{
-  constructor(vx, vy, gravity){
+  constructor(speed, distance, maxHeight){ // 速さ、水平最高点到達距離、垂直最高点到達距離
     super();
-    this.vx = vx; // 水平方向の初速度
-    this.vy = vy; // 垂直方向の初速度
-    this.gravity = gravity;
+    this.vx = speed; // 水平初速度
+    this.vy = 2 * speed * maxHeight / distance; // 垂直初速度
+    this.gravity = 2 * pow(speed / distance, 2) * maxHeight; // 重力加速度
   }
   execute(_actor){
     _actor.timer.step(); // カウントは1ずつ増やす
     let cnt = _actor.timer.getCnt();
-    _actor.pos.x += this.vx * cnt;
-    _actor.pos.y += this.vy - this.gravity * cnt; // これでいいね。物理。
+    _actor.pos.x += this.vx;
+    _actor.pos.y -= this.vy - this.gravity * cnt; // これでいいね。物理。
     shootingFlow.eject(_actor);
   }
 }
@@ -334,8 +345,8 @@ class entity{
     this.baseFlows = []; // baseのflowの配列
     this.addFlows = [];  // 動かすflowからなる配列    // これをupdateすることでflowを動かしたいんだけど
     this.actors = [];
-    this.patternIndex = 1; // うまくいくのかな・・
-    this.patternArray = [createPattern0, createPattern1];
+    this.patternIndex = 2; // うまくいくのかな・・
+    this.patternArray = [createPattern0, createPattern1, createPattern2];
   }
   getFlow(index){
     return this.flows[index];
@@ -405,7 +416,7 @@ class entity{
     }else if(params['type'] === 'assemble'){
       return new assembleHub(params['limit']);
     }else if(params['type'] === 'fall'){
-      return new fallFlow(params['vx'], params['vy'], params['gravity']);
+      return new fallFlow(params['speed'], params['distance'], params['height']);
     }else if(params['type'] === 'throw'){
       return new throwFlow(params['v']); // fromは廃止
     }
@@ -413,7 +424,7 @@ class entity{
   update(){
     this.actors.forEach(function(_actor){
       _actor.update(); // flowもupdateしたいんだけどね
-    })
+    }) // addFlowsを毎フレームupdateできないか考えてみる。なんなら新しくクラス作るとか。activeFlow（？？？）
   }
   draw(){
     image(this.base, 0, 0);
@@ -449,6 +460,7 @@ function createPattern0(){
 }
 
 function createPattern1(){
+  // assembleとjumpの実験
   let posX = multiSeq([100, 200, 300], 4);
   let posY = jointSeq([constSeq(100, 3), constSeq(200, 3), constSeq(300, 3), constSeq(400, 3)]);
   let vecs = getVector(posX, posY);
@@ -460,12 +472,35 @@ function createPattern1(){
   all.registFlow(additional);
   all.registNextFlowMulti([6, 7, 8, 9, 10, 11, 12], [[9], [10, 13], [12], [11, 15], [8], [8], [3, 5, 6]]);
   all.registNextFlowMulti([13, 14, 15, 16, 17], [[16], [8], [17], [14], [14]]);
-  console.log(all.flows[7]);
+  //console.log(all.flows[7]);
   all.registActor([3, 5, 6], [2, 2, 2], [0, 1, 2]);
   all.activateAll();
+  //all.flows.forEach(function(f){console.log(f.index);})
 }
 // generateHubとkillHub作りたい
 // 色に合わせてconvertも作りたいけど明日にしよ
+function createPattern2(){
+  // shootingの実験
+  let posX = [60].concat(constSeq(120, 5)).concat(constSeq(180, 5)).concat([240, 300]);
+  let posY = [180].concat(arSeq(60, 60, 5)).concat(arSeq(60, 60, 5)).concat([180, 180]);
+  let vecs = getVector(posX, posY);
+  console.log(vecs);
+  let paramSet = getOrbitalFlow(vecs, [0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 8, 11], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'straight');
+  console.log("How?");
+  all.registFlow(paramSet);
+  let throwSet = typeSeq('throw', 4);
+  let vSet = [createVector(1, 1), createVector(1, 1), createVector(1, -1), createVector(1, -1)];
+  console.log("Where?");
+  for(let i = 0; i < 4; i++){ throwSet[i]['v'] = vSet[i]; }
+  console.log("What?");
+  let fallSet = typeSeq('fall', 3);
+  let dataSet = [[1, 30, 60], [1, 60, 120], [2, 60, 60]];
+  for(let i = 0; i < 3; i++){ fallSet[i]['speed'] = dataSet[i][0]; fallSet[i]['distance'] = dataSet[i][1]; fallSet[i]['height'] = dataSet[i][2]; }
+  all.registFlow(throwSet.concat(fallSet));
+  all.registNextFlowMulti(arSeq(0, 1, 12), [[5], [6], [7], [8], [9], [12], [13], [10, 16], [14], [15], [11, 17], [18]]);
+  all.registActor([0, 1, 2, 3, 4, 2, 2], [2, 2, 2, 2, 2, 2, 2], [0, 1, 2, 3, 4, 5, 6]);
+  all.activateAll();
+}
 
 // --------------------------------------------------------------------------------------- //
 // utility.
