@@ -4,7 +4,10 @@
 let all; // 全体
 let palette; // カラーパレット
 
-const PATTERN_NUM = 6;
+let parallelFunc = [funcP0, funcP1];
+let normalFunc = [funcN0, funcN1];
+
+const PATTERN_NUM = 7;
 const IDLE = 0;
 const IN_PROGRESS = 1;
 const COMPLETED = 2;
@@ -303,6 +306,95 @@ class throwFlow extends shootingFlow{
   }
 }
 
+// やっと本題に入れる。2時間もかかったよ。
+class easingFlow extends flow{
+  constructor(easeId_parallel, easeId_normal, ratio, spanTime){
+    super();
+    this.easeId_parallel = easeId_parallel;
+    this.easeId_normal = easeId_normal;
+    this.ratio = ratio // 垂直イージングの限界の距離に対する幅。
+    this.from; // 予めがっちり決めるのがorbital, 行先だけ決めるのがoriented, 方向と距離だけ決めるのがvector
+    this.to; // なんだけど最終的にはどっちもfromとtoが確定します。
+    this.spanTime = spanTime; // 所要フレーム数（デフォルトはfromからtoまでの距離をスピードで割ったもの）
+    this.diffVector; // 垂直方向へのずれ。
+  }
+  setSpanTime(_actor){
+    if(this.spanTime < 0){
+      this.spanTime = p5.Vector.dist(this.from, this.to) / _actor.speed; // fromとtoが決まった後で適切に呼び出す
+    }
+  }
+  initialize(_actor){
+    this.setSpanTime(_actor);
+    // ずれ
+    this.diffVector = createVector(this.to.y - this.from.y, -(this.to.x - this.from.x)).mult(this.ratio);
+    console.log(this.diffVector.x);
+    console.log(this.diffVector.y);
+    _actor.timer.reset();
+  }
+  getProgress(_actor){
+    //console.log(_actor);
+    _actor.timer.step(); // 1ずつ増やす
+    let cnt = _actor.timer.getCnt();
+    if(cnt >= this.spanTime){
+      cnt = this.spanTime;
+      _actor.setState(COMPLETED);
+    }
+    return cnt / this.spanTime;
+  }
+  execute(_actor){
+    let progress = this.getProgress(_actor);
+    let easedProgress = parallelFunc[this.easeId_parallel](progress);
+    //console.log(normalFunc[0]);
+    //console.log(this);
+    let normalDiff = normalFunc[this.easeId_normal](progress);
+    //console.log(this.to);
+    _actor.pos.x = map(easedProgress, 0, 1, this.from.x, this.to.x);
+    _actor.pos.y = map(easedProgress, 0, 1, this.from.y, this.to.y);
+    let easeVectorN = p5.Vector.mult(this.diffVector, normalDiff);
+    //console.log(easeVectorN.x);
+    //console.log(easeVectorN.y);
+    _actor.pos.add(easeVectorN);
+  }
+}
+
+class orbitalEasingFlow extends easingFlow{
+  constructor(easeId_parallel, easeId_normal, ratio, spanTime, from, to){
+    super(easeId_parallel, easeId_normal, ratio, spanTime)
+    this.from = from;
+    this.to = to; // fromとtoがベクトルで与えられる最も一般的な形
+  }
+}
+
+class orientedFlow extends easingFlow{
+  constructor(easeId_parallel, easeId_normal, ratio, spanTime, to){
+    super(easeId_parallel, easeId_normal, ratio, spanTime)
+    this.to = to;
+  }
+  initialize(_actor){
+    this.from = createVector(_actor.pos.x, _actor.pos.y);
+    this.setSpanTime(_actor);
+    this.diffVector = createVector(this.to.y - this.from.y, -(this.to.x - this.from.x)).mult(this.ratio);
+    _actor.timer.reset();
+  }
+  setDestination(to){ // 直接toをいじれる
+    this.to = to;
+  }
+}
+
+class vectorFlow extends easingFlow{
+  constructor(easeId_parallel, easeId_normal, ratio, spanTime, directionVector){
+    super(easeId_parallel, easeId_normal, ratio, spanTime)
+    this.directionVector = directionVector;
+  }
+  initialize(_actor){
+    this.from = createVector(_actor.pos.x, _actor.pos.y);
+    this.to = p5.Vector.add(this.from, this.directionVector);
+    this.setSpanTime(_actor);
+    this.diffVector = createVector(this.to.y - this.from.y, -(this.to.x - this.from.x)).mult(this.ratio);
+    _actor.timer.reset();
+  }
+}
+
 flow.index = 0; // convertに使うflowの連番
 
 // 純粋なactorはflowをこなすだけ、言われたことをやるだけの存在
@@ -338,6 +430,7 @@ class actor{
   }
   idleAction(){
     this.currentFlow.initialize(this); // flowに初期化してもらう
+    //console.log("initialize");
     this.setState(IN_PROGRESS);
   }
   in_progressAction(){
@@ -509,8 +602,8 @@ class entity{
     this.actors = [];
     this.initialGimic = [];  // flow開始時のギミック
     this.completeGimic = []; // flow終了時のギミック
-    this.patternIndex = 5; // うまくいくのかな・・
-    this.patternArray = [createPattern0, createPattern1, createPattern2, createPattern3, createPattern4, createPattern5];
+    this.patternIndex = 6; // うまくいくのかな・・
+    this.patternArray = [createPattern0, createPattern1, createPattern2, createPattern3, createPattern4, createPattern5, createPattern6];
   }
   getFlow(givenIndex){
     for(let i = 0; i < this.flows.length; i++){
@@ -620,6 +713,7 @@ class entity{
   }
   update(){
     this.actors.forEach(function(_actor){
+      //console.log(_actor);
       _actor.update(); // flowもupdateしたいんだけどね
     }) // addFlowsを毎フレームupdateできないか考えてみる。なんなら新しくクラス作るとか。activeFlow（？？？）
   }
@@ -751,7 +845,7 @@ function createPattern5(){
   // 次にcolorSortHub
   paramSet = typeSeq('colorSort', 6); // const使うと全部同じになっちゃう
   for(let i = 0; i < 6; i++){ paramSet[i]['targetColor'] = i; } // 0, 1, 2, 3, 4, 5を分けてね
-  console.log(paramSet);
+  //console.log(paramSet);
   all.registFlow(paramSet);
   // 次にgenerateModule
   all.registFlow([{type:'wait', span:30}]); // ここに普通のactorを走らせて、自分とつないでウロボロスにする
@@ -763,6 +857,22 @@ function createPattern5(){
   let generateRunner = new actor(all.getFlow(27));
   generateRunner.activate();
   all.actors.push(generateRunner); // 走るだけ
+}
+
+function createPattern6(){
+  /*let v0 = createVector(100, 100);
+  let v1 = createVector(500, 500);
+  let f = new orbitalEasingFlow(0, 0, 0.1, -1, v0, v1);*/
+  /*let v1 = createVector(500, 300);
+  let f = new orientedFlow(0, 0, 0.1, -1, v1);*/
+  let dirv = createVector(400, -300);
+  let f = new vectorFlow(0, 0, 0.1, 120, dirv);
+  all.flows.push(f);
+  all.baseFlows.push(f);
+  let _actor = new movingActor(f, 2, 0);
+  _actor.pos.set(100, 500);
+  all.actors.push(_actor);
+  all.activateAll();
 }
 
 // --------------------------------------------------------------------------------------- //
@@ -841,4 +951,20 @@ function getOrbitalFlow(vecs, fromIds, toIds, typename, allOne = true){
     paramSet.push(dict);
   }
   return paramSet;
+}
+
+function funcP0(r){
+  return r*r;
+}
+
+function funcP1(r){
+  return r;
+}
+
+function funcN0(r){
+  return sin(20 * PI * r);
+}
+
+function funcN1(r){
+  return 0;
 }
