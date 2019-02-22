@@ -4,7 +4,7 @@
 let all; // 全体
 let palette; // カラーパレット
 
-const PATTERN_NUM = 5;
+const PATTERN_NUM = 6;
 const IDLE = 0;
 const IN_PROGRESS = 1;
 const COMPLETED = 2;
@@ -24,6 +24,15 @@ function draw(){
   all.initialGimicAction();  // 初期化前ギミックチェック
   all.completeGimicAction(); // 完了時ギミックチェック
   all.draw();
+  push();
+  fill('red');
+  rect(0, 0, 40, 40);
+  fill('blue')
+  rect(0, 40, 40, 40);
+  fill(0);
+  text('stop', 10, 20);
+  text('start', 10, 60);
+  pop();
 }
 // updateしてからGimicをチェックすると、例えばこういうことが起きる。
 // まず、completeGimicでinActivateするやつを作ると、それを踏んだactorの動きが止まる。
@@ -31,14 +40,13 @@ function draw(){
 // そのあとすぐupdateに行くから解放される。これが逆だと、解放した直後に再びGimicが発動して
 // 動きが止まってしまうので、配置順がすごく大事。
 
-// デバッグ用
-function keyTyped(){
-  if(key === 'p'){ noLoop(); }
-  if(key === 'q'){ loop(); }
-}
-
 // バリエーションチェンジ
 function mouseClicked(){
+  if(mouseX < 40 && mouseY < 80){
+    if(mouseY < 40){ noLoop(); }
+    else{ loop(); }
+    return;
+  }
   let newIndex = (all.patternIndex + 1) % PATTERN_NUM;
   all.switchPattern(newIndex);
 }
@@ -117,6 +125,26 @@ class flow{
   display(gr){} // 一応書いておかないと不都合が生じそうだ
 }
 
+class waitFlow extends flow{
+  // ただ単に一定数カウントを進めるだけ。いわゆるアイドリングってやつね。
+  constructor(span){
+    super();
+    this.span = span; // どれくらい進めるか
+  }
+  initialize(_actor){ _actor.timer.reset(); }
+  execute(_actor){
+    _actor.timer.step(1);
+    //console.log(_actor.timer.getCnt());
+    if(_actor.timer.getCnt() >= this.span){ _actor.setState(COMPLETED); } // limitって書いちゃった
+  }
+  // これの派生で、たとえば_actor.setState(COMPLETED)の前くらいに、
+  // 「キューの先頭のidをもつactorについてごにょごにょ」
+  // とか書いて、デフォルトは何もしない、にすれば、たとえばそのidをもつactorをactivateするとか、
+  // スピードが上がってるのを戻すとか、色々指示をとっかえひっかえしてできる。
+  // で、使い方としてはそのキューにidぶちこんでcombat走らせるだけだから簡単。
+  // spanで効果時間をいじれるし、combatのスピードを調節すれば効果時間をいじることも・・（未定）
+}
+
 // hubです。位置情報とかは基本なし（あることもある）。複雑なflowの接続を一手に引き受けます。
 class assembleHub extends flow{
   // いくつか集まったら解放される。
@@ -144,6 +172,22 @@ class killHub extends flow{
   constructor(){ super(); }
   execute(_actor){ _actor.kill(); } // おわり。ギミック処理もできるけどflowにすればvisualも定められるし（位置情報が必要）
 } // 位置やビジュアルを設けるかどうかは個別のプログラムに任せましょう
+
+class colorSortHub extends flow{
+  // 特定の色を1に、それ以外を0に。convertListは0と1のふたつであることを想定している。targetを1に振り分ける。
+  constructor(targetColor){
+    super();
+    this.targetColor = targetColor;
+  }
+  convert(_actor){
+    if(_actor.visual.kind === this.targetColor){
+      this.nextFlowIndex = 1;
+    }else{
+      this.nextFlowIndex = 0;
+    }
+    _actor.setFlow(this.convertList[this.nextFlowIndex]); // 然るべくconvert. おわり。
+  }
+} // そのうち別プロジェクトでやるつもり。
 
 // generateHubは特定のフローに・・あーどうしよかな。んー。。
 // こういうの、なんか別の概念が必要な気がする。convertしないからさ。違うでしょって話。
@@ -263,7 +307,7 @@ flow.index = 0; // convertに使うflowの連番
 
 // 純粋なactorはflowをこなすだけ、言われたことをやるだけの存在
 class actor{
-  constructor(f = undefined, speed = 1, kind = 0){
+  constructor(f = undefined){
     // kindはそのうち廃止してビジュアルをセッティングするなんかつくる
     this.index = actor.index++;
     this.currentFlow = f; // 名称をcurrentFlowに変更
@@ -280,18 +324,28 @@ class actor{
   // entityの側でまとめてactivate, inActivateすればまとめて動きを止めることも・・・・
   update(){
     if(!this.isActive){ return; } // activeじゃないなら何もすることはない。
-    // initialActionが入るのはここ
+    // initialGimicが入るのはここ
     if(this.state === IDLE){
-      this.currentFlow.initialize(this); // flowに初期化してもらう
-      this.setState(IN_PROGRESS);
+      this.idleAction();
     }
     if(this.state === IN_PROGRESS){
-      this.currentFlow.execute(this); // 実行！この中で適切なタイミングでsetState(COMPLETED)してもらうの
+      this.in_progressAction();
     }else if(this.state === COMPLETED){
-      this.setState(IDLE);
-      this.currentFlow.convert(this); // ここで行先が定められないと[IDLEかつundefined]いわゆるニートになります（おい）
+      this.completeAction();
     }
-    // IN_PROGRESSのあとすぐにCOMPLETEDにしないことでactionをはさむ余地を与える
+    // completeGimicが入るのはここ。
+    // IN_PROGRESSのあとすぐにCOMPLETEDにしないことでGimicをはさむ余地を与える.
+  }
+  idleAction(){
+    this.currentFlow.initialize(this); // flowに初期化してもらう
+    this.setState(IN_PROGRESS);
+  }
+  in_progressAction(){
+    this.currentFlow.execute(this); // 実行！この中で適切なタイミングでsetState(COMPLETED)してもらうの
+  }
+  completeAction(){
+    this.setState(IDLE);
+    this.currentFlow.convert(this); // ここで行先が定められないと[IDLEかつundefined]いわゆるニートになります（おい）
   }
   kill(){
     // 自分を排除する
@@ -301,6 +355,7 @@ class actor{
     }
     all.actors.splice(selfId, 1);
   }
+  display(){};
 }
 
 // 色や形を与えられたactor. ビジュアル的に分かりやすいので今はこれしか使ってない。
@@ -314,6 +369,15 @@ class movingActor extends actor{
   display(){
     this.visual.display(this.pos);
   }
+}
+
+// 1つだけflowをこなしたら消える
+class combat extends actor{
+  constructor(f = undefined){
+    super(f);
+    // 1ずつ増えるしvisual要らないしって感じ。
+  }
+  completeAction(){ this.kill(); } // ひとつflowを終えたら消滅
 }
 
 actor.index = 0; // 0, 1, 2, 3, ....
@@ -402,28 +466,36 @@ class activateGimic extends Gimic{
 }
 
 // targetFlowIdのところは-1でallRandomにしたり、
-// 範囲指定してその中からランダムで選ばれるようにしても面白そうだ。
+// 範囲は特定（2とか）なら[2], 3と4と5のどれかなら[3, 4, 5]みたいに指定。
+
 class generateGimic extends Gimic{
-  constructor(myFlowId, targetFlowId, targetColor = -1, limit = 10){
+  constructor(myFlowId, targetFlowIdArray, targetColor = -1, limit = 10){
     super(myFlowId);
-    this.targetFlowId = targetFlowId; // どこのflowに出現させるか
+    this.targetFlowIdArray = targetFlowIdArray; // 発生させる対象flow（ハブでもいいし）
     this.targetColor = targetColor; // 色指定。-1のときはランダム
     this.limit = limit; // 限界値（たとえば10なら10匹以上にはしない）
   }
   action(_actor){
+    let targetFlowId = this.targetFlowIdArray[randomInt(this.targetFlowIdArray.length)]; // ランダムでどこか
     if(all.actors.length >= this.limit){ return; }
     let setColor = this.targetColor;
     if(setColor < 0){ setColor = randomInt(7); } // -1のときはランダム
-    let newActor = new movingActor(all.flows[this.targetFlowId], 2 + randomInt(3), setColor);
+    let newActor = new movingActor(all.flows[targetFlowId], 2 + randomInt(3), setColor);
     newActor.activate();
     all.actors.push(newActor);
   }
 }
 
+
+// コードの再利用ができるならこれを複数バージョンに・・って事も出来るんだけどね
+
 // Colosseoっていう、いわゆる紅白戦みたいなやつ作りたいんだけど。なんか、互いに殺しあってどっちが勝つとか。
 // HP設定しといて、攻撃と防御作って、色々。その時にこれで、
 // 攻撃や防御UP,DOWN, HP増減、回復、色々。まあ回復はHub..HubにGimic配置してもいいし。
 // そういうのに使えそうね。
+// キャラビジュアルは黒と白のシンプルな奴にして縦棒で目とか付けて一応ディレクション変更で向きが変わるように、
+// やられたら目がバッテンになって消えるみたいな
+// ダメージの色とか決めて（バー出せたらかっこいいけど）
 
 // flowのupdateとかやりたいわね
 // 使い終わったactorの再利用とかしても面白そう（他のプログラムでやってね）（trash）
@@ -437,8 +509,8 @@ class entity{
     this.actors = [];
     this.initialGimic = [];  // flow開始時のギミック
     this.completeGimic = []; // flow終了時のギミック
-    this.patternIndex = 4; // うまくいくのかな・・
-    this.patternArray = [createPattern0, createPattern1, createPattern2, createPattern3, createPattern4];
+    this.patternIndex = 5; // うまくいくのかな・・
+    this.patternArray = [createPattern0, createPattern1, createPattern2, createPattern3, createPattern4, createPattern5];
   }
   getFlow(givenIndex){
     for(let i = 0; i < this.flows.length; i++){
@@ -524,6 +596,10 @@ class entity{
       return new fallFlow(params['speed'], params['distance'], params['height']);
     }else if(params['type'] === 'throw'){
       return new throwFlow(params['v']); // fromは廃止
+    }else if(params['type'] === 'wait'){
+      return new waitFlow(params['span']); // spanフレーム数だけアイドリング。combatに使うなど用途色々
+    }else if(params['type'] === 'colorSort'){
+      return new colorSortHub(params['targetColor']); // targetColorだけ設定
     }
   }
   initialGimicAction(){
@@ -575,11 +651,12 @@ function createPattern0(){
   let vecs = getVector([100, 100, 300, 300], [100, 300, 300, 100]);
   let paramSet = getOrbitalFlow(vecs, [0, 1, 2, 3], [1, 2, 3, 0], 'straight');
   all.registFlow(paramSet);
-  all.connectMulti([0, 1, 2, 3], [[1], [2], [3], [0]]);
+  all.registFlow([{type:'wait', span:120}]); // waitFlowをさっそくつかってみよう→成功～いろいろ使えそう。
+  all.connectMulti([0, 1, 2, 3, 4], [[1], [4], [3], [0], [2]]);
   all.registActor([0], [2], [0]);
   all.activateAll();
   // 3番にkillを放り込んでみる
-  all.initialGimic.push(new killGimic(1)); // うまくいってるみたい
+  //all.initialGimic.push(new killGimic(1)); // うまくいってるみたい
   all.completeGimic.push(new killGimic(3));
 }
 
@@ -637,7 +714,7 @@ function createPattern3(){
   all.connectMulti(arSeq(0, 1, 25), [[2, 3], [0], [6], [4, 8], [1], [1], [12, 25], [6], [7, 14], [4, 8], [9, 16], [5, 10], [18, 13], [7, 14], [15, 19], [9, 16], [17], [11, 26], [22], [22], [15, 19], [17], [23], [20, 21], [24]]);
   all.registActor([8, 9, 14, 15, 24], [2, 2, 2, 2, 1], [0, 1, 2, 3, 6]);
   all.activateAll();
-  all.completeGimic.push(new generateGimic(24, 0)); // 24の完了時に0に発生させる
+  all.completeGimic.push(new generateGimic(24, [0, 1, 3, 4])); // 24の完了時に0, 1, 3, 4のいずれかに発生させる
 }
 
 function createPattern4(){
@@ -654,11 +731,38 @@ function createPattern4(){
   all.activateAll();
 
   for(let i = 4; i <= 7; i++){
-    all.completeGimic.push(new inActivateGimic(i));
+    all.completeGimic.push(new inActivateGimic(i)); // 4～7は完了時に止まる。
   }
   for(let i = 0; i <= 3; i++){
-    all.completeGimic.push(new activateGimic(i, 1));
+    all.completeGimic.push(new activateGimic(i, 1)); // 0～3を踏むと1番がactivateされる
   }
+}
+
+function createPattern5(){
+  // colorSortHubの実験
+  let posX = arSeq(60, 40, 8).concat(arSeq(100, 40, 7));
+  let posY = constSeq(80, 8).concat(constSeq(160, 7));
+  let vecs = getVector(posX, posY);
+  let paramSet = getOrbitalFlow(vecs, [0, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 7], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], 'straight');
+  all.registFlow(paramSet);
+  // 次にfallFlow
+  paramSet = constSeq({type:'fall', speed:2, distance:50, height:50}, 7);
+  all.registFlow(paramSet);
+  // 次にcolorSortHub
+  paramSet = typeSeq('colorSort', 6); // const使うと全部同じになっちゃう
+  for(let i = 0; i < 6; i++){ paramSet[i]['targetColor'] = i; } // 0, 1, 2, 3, 4, 5を分けてね
+  console.log(paramSet);
+  all.registFlow(paramSet);
+  // 次にgenerateModule
+  all.registFlow([{type:'wait', span:30}]); // ここに普通のactorを走らせて、自分とつないでウロボロスにする
+  // 次に接続
+  all.connectMulti(arSeq(0, 1, 28), [[21], [22], [23], [24], [25], [26], [13], [14], [15], [16], [17], [18], [19], [20], [], [], [], [], [], [], [], [1, 7], [2, 8], [3, 9], [4, 10], [5, 11], [6, 12], [27]]);
+  // 次にgenerateGimic
+  all.completeGimic.push(new generateGimic(27, [0]));
+  // 生成用のactor
+  let generateRunner = new actor(all.getFlow(27));
+  generateRunner.activate();
+  all.actors.push(generateRunner); // 走るだけ
 }
 
 // --------------------------------------------------------------------------------------- //
