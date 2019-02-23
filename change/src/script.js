@@ -327,8 +327,8 @@ class easingFlow extends flow{
     this.setSpanTime(_actor);
     // ずれ
     this.diffVector = createVector(this.to.y - this.from.y, -(this.to.x - this.from.x)).mult(this.ratio);
-    console.log(this.diffVector.x);
-    console.log(this.diffVector.y);
+    //console.log(this.diffVector.x);
+    //console.log(this.diffVector.y);
     _actor.timer.reset();
   }
   getProgress(_actor){
@@ -362,6 +362,13 @@ class orbitalEasingFlow extends easingFlow{
     super(easeId_parallel, easeId_normal, ratio, spanTime)
     this.from = from;
     this.to = to; // fromとtoがベクトルで与えられる最も一般的な形
+  }
+  initialize(_actor){
+    _actor.pos.set(this.from.x, this.from.y); // orbitalなので初期位置を設定
+    this.setSpanTime(_actor);
+    // ずれ
+    this.diffVector = createVector(this.to.y - this.from.y, -(this.to.x - this.from.x)).mult(this.ratio);
+    _actor.timer.reset();
   }
 }
 
@@ -693,6 +700,12 @@ class entity{
       return new waitFlow(params['span']); // spanフレーム数だけアイドリング。combatに使うなど用途色々
     }else if(params['type'] === 'colorSort'){
       return new colorSortHub(params['targetColor']); // targetColorだけ設定
+    }else if(params['type'] === 'orbitalEasing'){
+      return new orbitalEasingFlow(params['easeId1'], params['easeId2'], params['ratio'], params['spanTime'], params['from'], params['to']);
+    }else if(params['type'] === 'oriented'){
+      return new orientedFlow(params['easeId1'], params['easeId2'], params['ratio'], params['spanTime'], params['to']);
+    }else if(params['type'] === 'vector'){
+      return new vectorFlow(params['easeId1'], params['easeId2'], params['ratio'], params['spanTime'], params['directionVector']);
     }
   }
   initialGimicAction(){
@@ -860,19 +873,28 @@ function createPattern5(){
 }
 
 function createPattern6(){
-  /*let v0 = createVector(100, 100);
-  let v1 = createVector(500, 500);
-  let f = new orbitalEasingFlow(0, 0, 0.1, -1, v0, v1);*/
-  /*let v1 = createVector(500, 300);
-  let f = new orientedFlow(0, 0, 0.1, -1, v1);*/
-  let dirv = createVector(400, -300);
-  let f = new vectorFlow(0, 0, 0.1, 120, dirv);
-  all.flows.push(f);
-  all.baseFlows.push(f);
-  let _actor = new movingActor(f, 2, 0);
-  _actor.pos.set(100, 500);
-  all.actors.push(_actor);
-  all.activateAll();
+  // まずorbitalEasingを5つ。
+  let posX = [100, 200, 300, 400, 500, 500, 400, 300, 200, 100];
+  let posY = constSeq(100, 5).concat(constSeq(400, 5));
+  let vecs = getVector(posX, posY);
+  let paramSet = getEasingFlow(vecs, 'orbitalEasing', constSeq(0, 5), constSeq(0, 5), constSeq(0.1, 5), constSeq(120, 5), [0, 1, 2, 3, 4], [5, 6, 7, 8, 9]);
+  all.registFlow(paramSet);
+  // 次にorientedを5つ。
+  posX = arSinSeq(0, 2 * PI / 5, 5, 200, 300);
+  posY = arCosSeq(0, 2 * PI / 5, 5, -100, 300);
+  vecs = getVector(posX, posY);
+  paramSet = getEasingFlow(vecs, 'oriented', constSeq(0, 5), constSeq(0, 5), constSeq(0.1, 5), constSeq(120, 5), [0, 1, 2, 3, 4]);
+  all.registFlow(paramSet);
+  // 次にvectorFlowを5つ。
+  posX = constSeq(0, 5);
+  posY = constSeq(-150, 5);
+  vecs = getVector(posX, posY);
+  paramSet = getEasingFlow(vecs, 'vector', constSeq(0, 5), constSeq(0, 5), constSeq(0.1, 5), constSeq(120, 5), [0, 1, 2, 3, 4]);
+  all.registFlow(paramSet);
+  // つなげましょう
+  all.connectMulti([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [[5], [6], [7], [8], [9], [10], [11], [12], [13], [14]]);
+  all.registActor([0, 1, 2, 3, 4], [1, 1, 1, 1, 1], [0, 1, 2, 3, 4]);
+  all.activateAll(); // 実験はこのくらいでいいんで次行きましょう
 }
 
 // --------------------------------------------------------------------------------------- //
@@ -953,6 +975,25 @@ function getOrbitalFlow(vecs, fromIds, toIds, typename, allOne = true){
   return paramSet;
 }
 
+function getEasingFlow(vecs, typename, idSet1, idSet2, ratioSet, spanSet, firstVectorIds, secondVectorIds = undefined){
+  // typenameSetは色々、orbitalとかorientedとかvectorとか入ってる。
+  // typenameに応じたeasingFlowのパラメータセットの配列を作成して返却する
+  let paramSet = [];
+  for(let i = 0; i < idSet1.length; i++){
+    let dict = {type:typename, easeId1:idSet1[i], easeId2:idSet2[i], ratio:ratioSet[i], spanTime:spanSet[i]};
+    if(typename === 'orbitalEasing'){
+      dict['from'] = vecs[firstVectorIds[i]];
+      dict['to'] = vecs[secondVectorIds[i]];
+    }else if(typename === 'oriented'){
+      dict['to'] = vecs[firstVectorIds[i]];
+    }else if(typename === 'vector'){
+      dict['directionVector'] = vecs[firstVectorIds[i]];
+    }
+    paramSet.push(dict);
+  }
+  return paramSet;
+}
+
 function funcP0(r){
   return r*r;
 }
@@ -962,7 +1003,7 @@ function funcP1(r){
 }
 
 function funcN0(r){
-  return sin(20 * PI * r);
+  return sin(2 * PI * r);
 }
 
 function funcN1(r){
