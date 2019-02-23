@@ -67,39 +67,6 @@ class counter{
   }
 } // limitは廃止（使う側が何とかしろ）（てかもうクラスにする意味ないやんな）
 
-class loopCounter extends counter{ // ぐるぐるまわる
-  constructor(period){ // periodは正にしてね
-    super();
-    this.period = period;
-  }
-  step(diff = 1){
-    this.cnt += diff;
-    if(this.cnt > this.period){ this.cnt -= this.period; return true; }
-    return false; // 周回時にtrueを返す（何か処理したいときにどうぞ）
-  }
-}
-class reverseCounter extends counter{ // いったりきたり
-  constructor(interval){
-    super();
-    this.interval = interval;
-    this.signature = 1; // 符号
-  }
-  step(diff = 1){
-    // diffは常に正オッケーです。
-    this.cnt += diff * this.signature;
-    if(this.cnt > this.interval){
-      this.cnt = 2 * this.interval - this.cnt;
-      this.signature *= -1;
-      return true;
-    }else if(this.cnt < 0){
-      this.cnt = -this.cnt;
-      this.signature *= -1;
-      return true;
-    }
-    return false; // 折り返すときにtrueを返す
-  }
-}
-
 // 全部フロー。ただし複雑なconvertはハブにおまかせ～色とかいじれるといいね。今位置情報しかいじってない・・
 class flow{
   constructor(){
@@ -148,165 +115,9 @@ class waitFlow extends flow{
   // spanで効果時間をいじれるし、combatのスピードを調節すれば効果時間をいじることも・・（未定）
 }
 
-// hubです。位置情報とかは基本なし（あることもある）。複雑なflowの接続を一手に引き受けます。
-class assembleHub extends flow{
-  // いくつか集まったら解放される。
-  constructor(limit){
-    super();
-    this.limit = limit;
-    this.volume = 0; // lim-1→limのときtrue, 1→0のときfalse.
-    this.open = false; // 出口が開いてるかどうかのフラグ
-  }
-  initialize(_actor){
-    this.volume++; // これだけ。
-    if(this.volume >= this.limit){ this.open = true; } // limitに達したら開くよ
-  }
-  execute(_actor){
-    if(this.open){
-      _actor.setState(COMPLETED);
-      this.volume--; // 出て行ったら減らす
-      if(this.volume === 0){ this.open = false; } // 0になったタイミングで閉じる
-    } // 開いてるなら行って良し
-  }
-}
-
-class killHub extends flow{
-  // 殺すだけ
-  constructor(){ super(); }
-  execute(_actor){ _actor.kill(); } // おわり。ギミック処理もできるけどflowにすればvisualも定められるし（位置情報が必要）
-} // 位置やビジュアルを設けるかどうかは個別のプログラムに任せましょう
-
-class colorSortHub extends flow{
-  // 特定の色を1に、それ以外を0に。convertListは0と1のふたつであることを想定している。targetを1に振り分ける。
-  constructor(targetColor){
-    super();
-    this.targetColor = targetColor;
-  }
-  convert(_actor){
-    if(_actor.visual.kind === this.targetColor){
-      this.nextFlowIndex = 1;
-    }else{
-      this.nextFlowIndex = 0;
-    }
-    _actor.setFlow(this.convertList[this.nextFlowIndex]); // 然るべくconvert. おわり。
-  }
-} // そのうち別プロジェクトでやるつもり。
-
-// generateHubは特定のフローに・・あーどうしよかな。んー。。
-// こういうの、なんか別の概念が必要な気がする。convertしないからさ。違うでしょって話。
-
-// 始点と終点とspanからなりどこかからどこかへ行くことが目的のFlow.
-// 対象はmovingActorを想定しているのでposとか持ってないとエラーになります。
-class orbitalFlow extends flow{
-  constructor(from, to){
-    super();
-    this.from = from; // スタートの位置ベクトル
-    this.to = to; // ゴールの位置ベクトル
-    this.span;
-  }
-  getSpan(){ return this.span; }
-  initialize(_actor){
-    _actor.pos.set(this.from.x, this.from.y); // 初期位置与える、基本これでactorの位置いじってる、今は。
-    _actor.timer.reset(); // あ、resetでいいの・・
-  }
-  getProgress(_actor, diff){ // 進捗状況を取得（0~1）
-    _actor.timer.step(diff); // 進める～
-    let cnt = _actor.timer.getCnt(); // カウントゲットする～
-    if(cnt >= this.span){
-      cnt = this.span;
-      _actor.setState(COMPLETED); // 処理終了のお知らせ
-    }
-    return cnt / this.span; // 進捗報告(％)
-  }
-}
-
-class jumpFlow extends orbitalFlow{
-  // ジャンプするやつ
-  constructor(from, to){
-    super(from, to);
-    this.span = p5.Vector.dist(from, to);
-  }
-  execute(_actor){
-    let progress = this.getProgress(_actor, _actor.speed);
-    _actor.pos.x = map(progress, 0, 1, this.from.x, this.to.x);
-    _actor.pos.y = map(progress, 0, 1, this.from.y, this.to.y);
-    _actor.pos.y -= 2 * this.span * progress * (1 - progress); // 高さはとりあえずthis.span/2にしてみる
-  }
-}
-
-class straightFlow extends orbitalFlow{
-  constructor(from, to, factor){
-    super(from, to);
-    this.span = p5.Vector.dist(from, to);
-    this.factor = factor; // 2なら2倍速とかそういう。
-  }
-  execute(_actor){
-    // 直線
-    let progress = this.getProgress(_actor, _actor.speed * this.factor); // 速くなったり遅くなったり
-    _actor.pos.x = map(progress, 0, 1, this.from.x, this.to.x);
-    _actor.pos.y = map(progress, 0, 1, this.from.y, this.to.y);
-  }
-  display(gr){
-    // 線を引くだけです（ビジュアル要らないならなんかオプション付けてね・・あるいは、んー）
-    gr.push();
-    gr.strokeWeight(1.0);
-    gr.line(this.from.x, this.from.y, this.to.x, this.to.y);
-    gr.translate(this.from.x, this.from.y); // 矢印の根元に行って
-    let directionVector = createVector(this.to.x - this.from.x, this.to.y - this.from.y);
-    gr.rotate(directionVector.heading()); // ぐるんってやって行先をx軸正方向に置いて
-    let arrowSize = 7;
-    gr.translate(this.span - arrowSize, 0);
-    gr.fill(0);
-    gr.triangle(0, arrowSize / 2, 0, -arrowSize / 2, arrowSize, 0);
-    gr.pop();
-  }
-}
-
-// actorを画面外にふっとばす。ふっとばし方によりいろいろ。
-class shootingFlow extends flow{
-  constructor(){ super(); }
-  initialize(_actor){
-    _actor.timer.reset(); // resetするだけ
-  }
-  static eject(_actor){
-    // 画面外に出たら抹殺
-    if(_actor.pos.x > width || _actor.pos.x < 0 || _actor.pos.y < 0 || _actor.pos.y > height){
-      _actor.kill(); // 画面外に出たら消える
-    }
-  }
-}
-
-// 放物線を描きながら画面外に消えていく。物理、すごい・・
-class fallFlow extends shootingFlow{
-  constructor(speed, distance, maxHeight){ // 速さ、水平最高点到達距離、垂直最高点到達距離
-    super();
-    this.vx = speed; // 水平初速度
-    this.vy = 2 * abs(speed) * maxHeight / distance; // 垂直初速度
-    this.gravity = 2 * pow(speed / distance, 2) * maxHeight; // 重力加速度
-  }
-  execute(_actor){
-    _actor.timer.step(); // カウントは1ずつ増やす
-    let cnt = _actor.timer.getCnt();
-    _actor.pos.x += this.vx;
-    _actor.pos.y -= this.vy - this.gravity * cnt; // これでいいね。物理。
-    shootingFlow.eject(_actor);
-  }
-}
-
-// 直線的に動きながら消滅
-class throwFlow extends shootingFlow{
-  constructor(v){
-    super();
-    this.v = v; // 大きさ正規化しないほうが楽しいからこれでいいや
-  }
-  execute(_actor){
-    _actor.pos.x += this.v.x * _actor.speed; // ベクトルvの方向にとんでいく。
-    _actor.pos.y += this.v.y * _actor.speed;
-    shootingFlow.eject(_actor);
-  }
-}
-
 // やっと本題に入れる。2時間もかかったよ。
+// ratioが1より大きい時はずれ幅を直接長さで指定できるようにしたら面白そうね
+// ずれ幅にもイージング（1付近うろうろ系）を適用しても面白そう（やめて）
 class easingFlow extends flow{
   constructor(easeId_parallel, easeId_normal, ratio, spanTime){
     super();
@@ -686,21 +497,7 @@ class entity{
     }
   }
   static createFlow(params){
-    if(params['type'] === 'straight'){
-      return new straightFlow(params['from'], params['to'], params['factor']);
-    }else if(params['type'] === 'jump'){
-      return new jumpFlow(params['from'], params['to']);
-    }else if(params['type'] === 'assemble'){
-      return new assembleHub(params['limit']);
-    }else if(params['type'] === 'fall'){
-      return new fallFlow(params['speed'], params['distance'], params['height']);
-    }else if(params['type'] === 'throw'){
-      return new throwFlow(params['v']); // fromは廃止
-    }else if(params['type'] === 'wait'){
-      return new waitFlow(params['span']); // spanフレーム数だけアイドリング。combatに使うなど用途色々
-    }else if(params['type'] === 'colorSort'){
-      return new colorSortHub(params['targetColor']); // targetColorだけ設定
-    }else if(params['type'] === 'orbitalEasing'){
+    if(params['type'] === 'orbitalEasing'){
       return new orbitalEasingFlow(params['easeId1'], params['easeId2'], params['ratio'], params['spanTime'], params['from'], params['to']);
     }else if(params['type'] === 'oriented'){
       return new orientedFlow(params['easeId1'], params['easeId2'], params['ratio'], params['spanTime'], params['to']);
@@ -842,17 +639,6 @@ function getVector(posX, posY){
     vecs.push(createVector(posX[i], posY[i]));
   }
   return vecs;
-}
-
-// OrbitalFlow用の辞書作るよー
-function getOrbitalFlow(vecs, fromIds, toIds, typename, allOne = true){
-  let paramSet = [];
-  for(let i = 0; i < fromIds.length; i++){
-    let dict = {type: typename, from: vecs[fromIds[i]], to: vecs[toIds[i]]};
-    if(allOne){ dict['factor'] = 1; } // factorをすべて1にするオプション
-    paramSet.push(dict);
-  }
-  return paramSet;
 }
 
 function getEasingFlow(vecs, typename, idSet1, idSet2, ratioSet, spanSet, firstVectorIds, secondVectorIds = undefined){

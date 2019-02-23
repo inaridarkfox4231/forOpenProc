@@ -4,10 +4,12 @@
 let all; // 全体
 let palette; // カラーパレット
 
-let parallelFunc = [funcP0, funcP1];
+let parallelFunc = [funcP0, funcP1, funcP2, funcP3, funcP4, funcP5, funcP6, funcP7, funcP8];
 let normalFunc = [funcN0, funcN1];
 
-const PATTERN_NUM = 7;
+const PATTERN_NUM = 8;
+const COLOR_NUM = 7;
+
 const IDLE = 0;
 const IN_PROGRESS = 1;
 const COMPLETED = 2;
@@ -15,14 +17,15 @@ const COMPLETED = 2;
 function setup(){
   createCanvas(600, 600);
   // palette HSBでやってみたい
-  palette = [color(248, 155, 1), color(248, 230, 1), color(38, 248, 1), color(1, 248, 210), color(2, 9, 247), color(240, 2, 247), color(249, 0, 6)];
+  colorMode(HSB, 100);
+  palette = [color(0, 100, 100), color(10, 100, 100), color(17, 100, 100), color(35, 100, 100), color(52, 100, 100), color(64, 100, 100), color(80, 100, 100)];
   all = new entity();
   all.initialize();
   //console.log(palette);
 }
 
 function draw(){
-  background(220);
+  background(63, 20, 100);
   all.update(); // updateする
   all.initialGimicAction();  // 初期化前ギミックチェック
   all.completeGimicAction(); // 完了時ギミックチェック
@@ -118,12 +121,14 @@ class flow{
       _actor.inActivate(); // 次のフローがなければすることはないです。止まります。再びあれするならflowをsetしてね。
       return;
     }
-    if(this.nextFlowIndex < 0){
+    if(this.nextFlowIndex < 0){ // -1はランダムフラグ
       _actor.setFlow(this.convertList[randomInt(this.convertList.length)]);
     }else{
       _actor.setFlow(this.convertList[this.nextFlowIndex]);
     } // 次のflowが与えられるならそのままisActive継続、次の処理へ。
     // わざとこのあとinActivateにして特定の条件下でactivateさせても面白そう。
+    //console.log(this.index);
+    //console.log(_actor.currentFlow);
   }
   display(gr){} // 一応書いておかないと不都合が生じそうだ
 }
@@ -183,7 +188,7 @@ class colorSortHub extends flow{
     this.targetColor = targetColor;
   }
   convert(_actor){
-    if(_actor.visual.kind === this.targetColor){
+    if(_actor.visual.colorId === this.targetColor){
       this.nextFlowIndex = 1;
     }else{
       this.nextFlowIndex = 0;
@@ -191,6 +196,68 @@ class colorSortHub extends flow{
     _actor.setFlow(this.convertList[this.nextFlowIndex]); // 然るべくconvert. おわり。
   }
 } // そのうち別プロジェクトでやるつもり。
+
+class gateHub extends flow{
+  // gateHubはforLoopを模式化したもので、そこを何回も訪れたactorに別の行先を提供するもの。
+  constructor(norma){
+    this.norma = norma; // 必要周回数
+    this.register = []; // 周回数を記録する登録用の配列
+  }
+  getIndex(actorId){
+    // actorIdのactorが登録されているか調べてそのindexを返す、登録されてない時は-1を返す。
+    let index = -1;
+    for(let i = 0; i < this.register.length; i++){
+      if(this.register[i]['id'] === actorId){ index = i; }
+    }
+    return index;
+  }
+  convert(_actor){
+    // normaに満たない時は0に、満たすときは1に流す。
+    let index = this.getIndex(_actor);
+    if(index < 0){
+      this.register.push({id:_actor.index, loopCount:0}); // リストにない時は新規登録
+      index = this.register.length - 1; // indexをそのactorの存在番号で更新
+    }else{
+      this.register[index]['loopCount']++; // リストにあるときは周回数を増やす
+    }
+    if(this.register[index] < this.norma){
+      this.nextFlowIndex = 0;
+    }else{
+      this.nextFlowIndex = 1;
+      // ここにリストからの削除命令
+      this.register.splice(index, 1);
+    }
+    _actor.setFlow(this.convertList[this.nextFlowIndex]);
+  }
+}
+
+// うぁぁ時間無駄にしたショック大きすぎて立ち直れない・・・・・・・・・
+class standardRegenerateHub extends flow{
+  // これを通すと色とか形とかスピードとかもろもろ変化する感じ。
+  constructor(newColorId = -1, newSpeed = -1, newFigureId = 0, newSizeFactor = 0.8){
+    super();
+    this.newColorId = newColorId;
+    this.newSpeed = newSpeed;
+    this.newFigureId = newFigureId;
+    this.newSizeFactor = newSizeFactor;
+    //console.log(2);
+  }
+  execute(_actor){
+    // -1のときはランダム
+    let colorId = (this.newColorId < 0 ? randomInt(7) : this.newColorId);
+    let speed = (this.newSpeed < 0 ? 2 + random(2) : this.newSpeed);
+    let figureId = this.newFigureId;
+    let sizeFactor = this.sizeFactor;
+    _actor.setVisual(colorId, figureId, sizeFactor); // あああspeedじゃないいいいいいい
+    _actor.setSpeed(speed);
+    _actor.visual.colorId = colorId; // カラーインデックスを更新
+    _actor.activate(); // non-Activeになってるのを想定してもいる
+    _actor.show(); // 消えてるなら姿を現す
+    //console.log(_actor);
+    _actor.setState(COMPLETED); // ここ"COMPLETED"にしてた信じられない
+  }
+}
+// standard. これの他に、サイズとか形とかランダムのやつ作るつもり。とりあえずこれは形とサイズ固定。
 
 // generateHubは特定のフローに・・あーどうしよかな。んー。。
 // こういうの、なんか別の概念が必要な気がする。convertしないからさ。違うでしょって話。
@@ -206,7 +273,7 @@ class orbitalFlow extends flow{
   }
   getSpan(){ return this.span; }
   initialize(_actor){
-    _actor.pos.set(this.from.x, this.from.y); // 初期位置与える、基本これでactorの位置いじってる、今は。
+    _actor.setPos(this.from.x, this.from.y); // 初期位置与える、基本これでactorの位置いじってる、今は。
     _actor.timer.reset(); // あ、resetでいいの・・
   }
   getProgress(_actor, diff){ // 進捗状況を取得（0~1）
@@ -228,9 +295,12 @@ class jumpFlow extends orbitalFlow{
   }
   execute(_actor){
     let progress = this.getProgress(_actor, _actor.speed);
-    _actor.pos.x = map(progress, 0, 1, this.from.x, this.to.x);
-    _actor.pos.y = map(progress, 0, 1, this.from.y, this.to.y);
-    _actor.pos.y -= 2 * this.span * progress * (1 - progress); // 高さはとりあえずthis.span/2にしてみる
+    let newX = map(progress, 0, 1, this.from.x, this.to.x);
+    let newY = map(progress, 0, 1, this.from.y, this.to.y) - 2 * this.span * progress * (1 - progress);
+    _actor.setPos(newX, newY);
+    //_actor.pos.x = map(progress, 0, 1, this.from.x, this.to.x);
+    //_actor.pos.y = map(progress, 0, 1, this.from.y, this.to.y);
+    //_actor.pos.y -= 2 * this.span * progress * (1 - progress); // 高さはとりあえずthis.span/2にしてみる
   }
 }
 
@@ -243,8 +313,9 @@ class straightFlow extends orbitalFlow{
   execute(_actor){
     // 直線
     let progress = this.getProgress(_actor, _actor.speed * this.factor); // 速くなったり遅くなったり
-    _actor.pos.x = map(progress, 0, 1, this.from.x, this.to.x);
-    _actor.pos.y = map(progress, 0, 1, this.from.y, this.to.y);
+    _actor.setPos(map(progress, 0, 1, this.from.x, this.to.x), map(progress, 0, 1, this.from.y, this.to.y));
+    //_actor.pos.x = map(progress, 0, 1, this.from.x, this.to.x);
+    //_actor.pos.y = map(progress, 0, 1, this.from.y, this.to.y);
   }
   display(gr){
     // 線を引くだけです（ビジュアル要らないならなんかオプション付けてね・・あるいは、んー）
@@ -262,8 +333,10 @@ class straightFlow extends orbitalFlow{
   }
 }
 
+// ejectiveFlowにしよ
+
 // actorを画面外にふっとばす。ふっとばし方によりいろいろ。
-class shootingFlow extends flow{
+class ejectiveFlow extends flow{
   constructor(){ super(); }
   initialize(_actor){
     _actor.timer.reset(); // resetするだけ
@@ -271,13 +344,14 @@ class shootingFlow extends flow{
   static eject(_actor){
     // 画面外に出たら抹殺
     if(_actor.pos.x > width || _actor.pos.x < 0 || _actor.pos.y < 0 || _actor.pos.y > height){
-      _actor.kill(); // 画面外に出たら消える
+      _actor.setState(COMPLETED);
+      _actor.hide(); // 姿を消す
     }
   }
 }
 
 // 放物線を描きながら画面外に消えていく。物理、すごい・・
-class fallFlow extends shootingFlow{
+class fallFlow extends ejectiveFlow{
   constructor(speed, distance, maxHeight){ // 速さ、水平最高点到達距離、垂直最高点到達距離
     super();
     this.vx = speed; // 水平初速度
@@ -289,12 +363,12 @@ class fallFlow extends shootingFlow{
     let cnt = _actor.timer.getCnt();
     _actor.pos.x += this.vx;
     _actor.pos.y -= this.vy - this.gravity * cnt; // これでいいね。物理。
-    shootingFlow.eject(_actor);
+    ejectiveFlow.eject(_actor);
   }
 }
 
 // 直線的に動きながら消滅
-class throwFlow extends shootingFlow{
+class shootingFlow extends ejectiveFlow{
   constructor(v){
     super();
     this.v = v; // 大きさ正規化しないほうが楽しいからこれでいいや
@@ -302,11 +376,14 @@ class throwFlow extends shootingFlow{
   execute(_actor){
     _actor.pos.x += this.v.x * _actor.speed; // ベクトルvの方向にとんでいく。
     _actor.pos.y += this.v.y * _actor.speed;
-    shootingFlow.eject(_actor);
+    ejectiveFlow.eject(_actor);
   }
 }
+// ejectiveはあと獣人いいよねじゃなくて螺旋を描きながら上に向かっていく。
+// 画面外に出た後の処理も同じ？
 
 // やっと本題に入れる。2時間もかかったよ。
+// ratioが1より大きい時はずれ幅を直接長さで指定できるようにしたら面白そうね
 class easingFlow extends flow{
   constructor(easeId_parallel, easeId_normal, ratio, spanTime){
     super();
@@ -323,16 +400,22 @@ class easingFlow extends flow{
       this.spanTime = p5.Vector.dist(this.from, this.to) / _actor.speed; // fromとtoが決まった後で適切に呼び出す
     }
   }
+  calcDiffVector(){
+    // ずれ。このdiffVectorに0～1のイージング（0開始0終了）を掛ける。これの定義の仕方。
+    if(this.ratio < 10){
+      this.diffVector = createVector(this.to.y - this.from.y, -(this.to.x - this.from.x)).mult(this.ratio);
+    }else{
+      // 10以上の時は単位法線ベクトルにratioを掛ける
+      let normalVector = createVector(this.to.y - this.from.y, -(this.to.x - this.from.x)).normalize();
+      this.diffVector = normalVector.mult(this.ratio);
+    }
+  }
   initialize(_actor){
     this.setSpanTime(_actor);
-    // ずれ
-    this.diffVector = createVector(this.to.y - this.from.y, -(this.to.x - this.from.x)).mult(this.ratio);
-    //console.log(this.diffVector.x);
-    //console.log(this.diffVector.y);
+    this.calcDiffVector();
     _actor.timer.reset();
   }
   getProgress(_actor){
-    //console.log(_actor);
     _actor.timer.step(); // 1ずつ増やす
     let cnt = _actor.timer.getCnt();
     if(cnt >= this.spanTime){
@@ -344,15 +427,10 @@ class easingFlow extends flow{
   execute(_actor){
     let progress = this.getProgress(_actor);
     let easedProgress = parallelFunc[this.easeId_parallel](progress);
-    //console.log(normalFunc[0]);
-    //console.log(this);
     let normalDiff = normalFunc[this.easeId_normal](progress);
-    //console.log(this.to);
     _actor.pos.x = map(easedProgress, 0, 1, this.from.x, this.to.x);
     _actor.pos.y = map(easedProgress, 0, 1, this.from.y, this.to.y);
     let easeVectorN = p5.Vector.mult(this.diffVector, normalDiff);
-    //console.log(easeVectorN.x);
-    //console.log(easeVectorN.y);
     _actor.pos.add(easeVectorN);
   }
 }
@@ -366,8 +444,7 @@ class orbitalEasingFlow extends easingFlow{
   initialize(_actor){
     _actor.pos.set(this.from.x, this.from.y); // orbitalなので初期位置を設定
     this.setSpanTime(_actor);
-    // ずれ
-    this.diffVector = createVector(this.to.y - this.from.y, -(this.to.x - this.from.x)).mult(this.ratio);
+    this.calcDiffVector();
     _actor.timer.reset();
   }
 }
@@ -380,7 +457,7 @@ class orientedFlow extends easingFlow{
   initialize(_actor){
     this.from = createVector(_actor.pos.x, _actor.pos.y);
     this.setSpanTime(_actor);
-    this.diffVector = createVector(this.to.y - this.from.y, -(this.to.x - this.from.x)).mult(this.ratio);
+    this.calcDiffVector();
     _actor.timer.reset();
   }
   setDestination(to){ // 直接toをいじれる
@@ -397,7 +474,7 @@ class vectorFlow extends easingFlow{
     this.from = createVector(_actor.pos.x, _actor.pos.y);
     this.to = p5.Vector.add(this.from, this.directionVector);
     this.setSpanTime(_actor);
-    this.diffVector = createVector(this.to.y - this.from.y, -(this.to.x - this.from.x)).mult(this.ratio);
+    this.calcDiffVector();
     _actor.timer.reset();
   }
 }
@@ -407,7 +484,7 @@ flow.index = 0; // convertに使うflowの連番
 // 純粋なactorはflowをこなすだけ、言われたことをやるだけの存在
 class actor{
   constructor(f = undefined){
-    // kindはそのうち廃止してビジュアルをセッティングするなんかつくる
+    // colorIdはそのうち廃止してビジュアルをセッティングするなんかつくる
     this.index = actor.index++;
     this.currentFlow = f; // 名称をcurrentFlowに変更
     this.timer = new counter();
@@ -430,7 +507,11 @@ class actor{
     if(this.state === IN_PROGRESS){
       this.in_progressAction();
     }else if(this.state === COMPLETED){
+      //console.log(555);
+      //if(this.currentFlow.index === 19){ console.log("Hello"); console.log(this.visible); }
+      //console.log(555);
       this.completeAction();
+      //if(this.currentFlow.index === 19){ console.log("Hello"); }
     }
     // completeGimicが入るのはここ。
     // IN_PROGRESSのあとすぐにCOMPLETEDにしないことでGimicをはさむ余地を与える.
@@ -445,7 +526,11 @@ class actor{
   }
   completeAction(){
     this.setState(IDLE);
+    //console.log(this.currentFlow.index);
+    //console.log(this.state);
     this.currentFlow.convert(this); // ここで行先が定められないと[IDLEかつundefined]いわゆるニートになります（おい）
+    //console.log("333");
+    //console.log(this.currentFlow.index);
   }
   kill(){
     // 自分を排除する
@@ -460,13 +545,32 @@ class actor{
 
 // 色や形を与えられたactor. ビジュアル的に分かりやすいので今はこれしか使ってない。
 class movingActor extends actor{
-  constructor(f = undefined, speed = 1, kind = 0){
+  constructor(f = undefined, speed = 1, colorId = 0, figureId = 0, sizeFactor = 0.8){
     super(f);
     this.pos = createVector(-100, -100); // flowが始まれば勝手に・・って感じ。
-    this.visual = new rollingFigure(kind); // 回転する図形
+    this.visual = new rollingFigure(colorId, figureId, sizeFactor); // 回転する図形
     this.speed = speed; // 今の状況だとスピードも要るかな・・クラスとして分離するかは要相談（composition）
+    this.visible = true;
   }
+  setPos(x, y){ // そのうちゲーム作ってみるとかなったら全部これ経由しないとね。
+    this.pos.x = x;
+    this.pos.y = y; // 今更だけどposをセットする関数（ほんとに今更）
+  }
+  getPos(){
+    return this.pos; // ゲッター
+  }
+  setSpeed(newSpeed){
+    this.speed = newSpeed;
+  }
+  // 今ここにsetVisualを作りたい。色id, サイズとか形とか。
+  setVisual(newColorId, newFigureId, newSizeFactor){
+    this.visual.reset(newColorId, newFigureId, newSizeFactor);
+    //console.log(this.visual);
+  }
+  show(){ this.visible = true; }   // 姿を現す
+  hide(){ this.visible = false; }  // 消える
   display(){
+    if(!this.visible){ return; }
     this.visual.display(this.pos);
   }
 }
@@ -486,23 +590,46 @@ actor.index = 0; // 0, 1, 2, 3, ....
 // やることは図形を表示させること、回転はオプションかな・・
 // たとえばアイテムとか、オブジェクト的な奴とか。回転しないことも考慮しないとなぁ。
 class figure{
-  constructor(kind){
-    this.kind = kind; // 0~6の値
-    this.graphic = createGraphics(20, 20);
-    inputGraphic(this.graphic, kind);
+  constructor(colorId, figureId = 0, sizeFactor = 0.8){
+    this.colorId = colorId; // 0~6の値
+    this.figureId = figureId; // 図形のタイプ
+    this.sizeFactor = sizeFactor; // おおきさ
+    this.graphic = createGraphics(40, 40);
+    //inputGraphic(this.graphic, colorId);
+    figure.setGraphic(this.graphic, colorId, figureId, sizeFactor);
+  }
+  reset(newColorId, newFigureId, newSizeFactor){
+    figure.setGraphic(this.graphic, newColorId, newFigureId, newSizeFactor);
+  }
+  static setGraphic(img, colorId, figureId = 0, sizeFactor = 0.8){
+    img.clear();
+    img.noStroke();
+    img.fill(palette[colorId]);
+    let r = 10 * sizeFactor;
+    //console.log(figureId);
+    if(figureId === 0){
+      //console.log("square");
+      img.rect(20 - r, 20 - r, 2 * r, 2 * r);
+    }else if(figureId === 1){
+      r *= 1.1;
+      img.ellipse(20, 20, 2 * r, 2 * r);
+    }else if(figureId === 2){
+      r *= 1.2;
+      img.triangle(20, 20 - 2 * r / Math.sqrt(3), 20 + r, 20 + (r / Math.sqrt(3)), 20 - r, 20 + (r / Math.sqrt(3)));
+    }
   }
   display(pos){
     push();
     translate(pos.x, pos.y);
-    image(this.graphic, -10, -10); // 20x20に合わせる
+    image(this.graphic, -20, -20); // 20x20に合わせる
     pop();
   }
 }
 
 // というわけでrollingFigure.
 class rollingFigure extends figure{
-  constructor(kind){
-    super(kind);
+  constructor(colorId, figureId = 0, sizeFactor = 0.8){
+    super(colorId, figureId, sizeFactor);
     this.rotation = random(2 * PI);
   }
   // updateはflowを定めてたとえば小さくなって消えるとか出来るようになるんだけどね（まだ）
@@ -512,7 +639,7 @@ class rollingFigure extends figure{
     translate(pos.x, pos.y);
     this.rotation += 0.1; // これも本来はfigureのupdateに書かないと・・基本的にupdate→drawの原則は破っちゃいけない
     rotate(this.rotation);
-    image(this.graphic, -10, -10); // 20x20に合わせる
+    image(this.graphic, -20, -20); // 20x20に合わせる
     pop();
   }
 }
@@ -609,8 +736,8 @@ class entity{
     this.actors = [];
     this.initialGimic = [];  // flow開始時のギミック
     this.completeGimic = []; // flow終了時のギミック
-    this.patternIndex = 6; // うまくいくのかな・・
-    this.patternArray = [createPattern0, createPattern1, createPattern2, createPattern3, createPattern4, createPattern5, createPattern6];
+    this.patternIndex = 5; // うまくいくのかな・・
+    this.patternArray = [createPattern0, createPattern1, createPattern2, createPattern3, createPattern4, createPattern5, createPattern6, createPattern7];
   }
   getFlow(givenIndex){
     for(let i = 0; i < this.flows.length; i++){
@@ -649,14 +776,19 @@ class entity{
     this.patternIndex = newIndex;
     this.initialize(); // これだけか。まぁhub無くなったしな。
   }
-  registActor(flowIds, speeds, kinds){
+  registActor(flowIds, speeds, colorIds){
     // flowはメソッドでidから取得。
-    //console.log(this.flows);
     for(let i = 0; i < flowIds.length; i++){
       let f = this.getFlow(flowIds[i]);
-      let newActor = new movingActor(f, speeds[i], kinds[i])
-      //console.log(newActor);
-      // newActor.initialize(); // ここで初期化しません
+      let newActor = new movingActor(f, speeds[i], colorIds[i])
+      this.actors.push(newActor);
+    }
+  }
+  registDetailedActor(flowIds, speeds, colorIds, figureIds, sizeIds){
+    // 個別に形とか大きさとか指定する
+    for(let i = 0; i < flowIds.length; i++){
+      let f = this.getFlow(flowIds[i]);
+      let newActor = new movingActor(f, speeds[i], colorIds[i], figureIds[i], sizeIds[i]);
       this.actors.push(newActor);
     }
   }
@@ -694,8 +826,8 @@ class entity{
       return new assembleHub(params['limit']);
     }else if(params['type'] === 'fall'){
       return new fallFlow(params['speed'], params['distance'], params['height']);
-    }else if(params['type'] === 'throw'){
-      return new throwFlow(params['v']); // fromは廃止
+    }else if(params['type'] === 'shooting'){
+      return new shootingFlow(params['v']); // fromは廃止
     }else if(params['type'] === 'wait'){
       return new waitFlow(params['span']); // spanフレーム数だけアイドリング。combatに使うなど用途色々
     }else if(params['type'] === 'colorSort'){
@@ -712,6 +844,7 @@ class entity{
     if(this.initialGimic.length === 0){ return; }
     this.initialGimic.forEach(function(g){
       this.actors.forEach(function(a){
+        if(a.currentFlow === undefined){ return; }
         if(g.initialCheck(a, a.currentFlow.index)){ g.action(a); }
       })
     }, this)
@@ -719,7 +852,8 @@ class entity{
   completeGimicAction(){
     if(this.completeGimic.length === 0){ return; }
     this.completeGimic.forEach(function(g){
-      this.actors.forEach(function(a){
+      this.actors.forEach(function(a){ // forEachの場合のcontinueは「return」だそうです（関数処理だから）
+        if(a.currentFlow === undefined){ return; }
         if(g.completeCheck(a, a.currentFlow.index)){ g.action(a); }
       })
     }, this)
@@ -741,13 +875,6 @@ class entity{
       _actor.display();
     })
   }
-}
-
-// 各種画像を作ります
-function inputGraphic(img, graphicsId){
-  img.noStroke();
-  img.fill(palette[graphicsId]);
-  img.rect(2, 2, 16, 16);
 }
 
 // --------------------------------------------------------------------------------------- //
@@ -793,35 +920,45 @@ function createPattern2(){
 
   let paramSet = getOrbitalFlow(vecs, [0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 8, 11], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'straight');
 
-  all.registFlow(paramSet);
-  let throwSet = typeSeq('throw', 4);
+  all.registFlow(paramSet); // 0～11
+  let shootingSet = typeSeq('shooting', 4);
   let vSet = [createVector(1, 1), createVector(1, 1), createVector(1, -1), createVector(1, -1)];
 
-  for(let i = 0; i < 4; i++){ throwSet[i]['v'] = vSet[i]; }
+  for(let i = 0; i < 4; i++){ shootingSet[i]['v'] = vSet[i]; }
 
   let fallSet = typeSeq('fall', 3);
   let dataSet = [[1, 30, 60], [1, 60, 120], [2, 60, 60]];
   for(let i = 0; i < 3; i++){ fallSet[i]['speed'] = dataSet[i][0]; fallSet[i]['distance'] = dataSet[i][1]; fallSet[i]['height'] = dataSet[i][2]; }
-  all.registFlow(throwSet.concat(fallSet));
-  all.connectMulti(arSeq(0, 1, 12), [[5], [6], [7], [8], [9], [12], [13], [10, 16], [14], [15], [11, 17], [18]]);
+  all.registFlow(shootingSet.concat(fallSet)); // 12～18
+  // standardRegenerateHubを使ってみよう
+  let reg = new standardRegenerateHub();
+  all.flows.push(reg);
+  all.baseFlows.push(reg); // 19.
+
+  all.connectMulti(arSeq(0, 1, 20), [[5], [6], [7], [8], [9], [12], [13], [10, 16], [14], [15], [11, 17], [18], [19], [19], [19], [19], [19], [19], [19], [0, 1, 2, 3, 4]]);
+  //console.log(reg);
   all.registActor([0, 1, 2, 3, 4, 2, 2], [2, 2, 2, 2, 2, 2, 2], [0, 1, 2, 3, 4, 5, 6]);
   all.activateAll();
 }
 
 function createPattern3(){
   // generateHubの実験。
-  let posX = [160, 120, 200, 80, 160, 240, 40, 120, 200, 280, 80, 160, 240, 120, 200, 160, 120, 200];
-  for(let i = 0; i < 18; i++){ posX[i] += 160; }
-  let posY = [40, 80, 80, 120, 120, 120, 160, 160, 160, 160, 200, 200, 200, 240, 240, 280, 320, 320];
+  let posX = [160, 120, 200, 80, 160, 240, 40, 120, 200, 280, 80, 160, 240, 120, 200, 160];
+  for(let i = 0; i < 16; i++){ posX[i] += 160; }
+  let posY = [40, 80, 80, 120, 120, 120, 160, 160, 160, 160, 200, 200, 200, 240, 240, 280];
   let vecs = getVector(posX, posY);
 
-  let paramSet = getOrbitalFlow(vecs, [0, 2, 1, 1, 4, 5, 3, 7, 4, 8, 5, 9, 6, 10, 7, 11, 8, 12, 10, 11, 14, 14, 13, 15, 16], [1, 0, 3, 4, 2, 2, 6, 3, 7, 4, 8, 5, 10, 7, 11, 8, 12, 9, 13, 13, 11, 12, 15, 14, 17], 'straight');
-  all.registFlow(paramSet);
+  let paramSet = getOrbitalFlow(vecs, [0, 2, 1, 1, 4, 5, 3, 7, 4, 8, 5, 9, 6, 10, 7, 11, 8, 12, 10, 11, 14, 14, 13, 15], [1, 0, 3, 4, 2, 2, 6, 3, 7, 4, 8, 5, 10, 7, 11, 8, 12, 9, 13, 13, 11, 12, 15, 14], 'straight');
+  all.registFlow(paramSet); // 0～23
   all.registFlow([{type:'fall', speed:-2, distance:60, height:60}, {type:'fall', speed:2, distance:60, height:60}]);
-  all.connectMulti(arSeq(0, 1, 25), [[2, 3], [0], [6], [4, 8], [1], [1], [12, 25], [6], [7, 14], [4, 8], [9, 16], [5, 10], [18, 13], [7, 14], [15, 19], [9, 16], [17], [11, 26], [22], [22], [15, 19], [17], [23], [20, 21], [24]]);
-  all.registActor([8, 9, 14, 15, 24], [2, 2, 2, 2, 1], [0, 1, 2, 3, 6]);
+  // regenerate.
+  let reg = new standardRegenerateHub();
+  all.flows.push(reg);
+  all.baseFlows.push(reg); // 26.
+  all.connectMulti(arSeq(0, 1, 27), [[2, 3], [0], [6], [4, 8], [1], [1], [12, 24], [6], [7, 14], [4, 8], [9, 16], [5, 10], [18, 13], [7, 14], [15, 19], [9, 16], [17], [11, 25], [22], [22], [15, 19], [17], [23], [20, 21], [26], [26], [0, 3, 8, 14, 15, 9, 4, 1]]);
+  all.registActor([8, 9, 14, 15, 3, 4, 19, 20], [2, 2, 2, 2, 2, 2, 2, 2], [0, 1, 2, 3, 4, 5, 6, 0]);
   all.activateAll();
-  all.completeGimic.push(new generateGimic(24, [0, 1, 3, 4])); // 24の完了時に0, 1, 3, 4のいずれかに発生させる
+  //all.completeGimic.push(new generateGimic(24, [0, 1, 3, 4])); // 24の完了時に0, 1, 3, 4のいずれかに発生させる
 }
 
 function createPattern4(){
@@ -861,15 +998,20 @@ function createPattern5(){
   //console.log(paramSet);
   all.registFlow(paramSet);
   // 次にgenerateModule
-  all.registFlow([{type:'wait', span:30}]); // ここに普通のactorを走らせて、自分とつないでウロボロスにする
+  //all.registFlow([{type:'wait', span:30}]); // ここに普通のactorを走らせて、自分とつないでウロボロスにする
   // 次に接続
-  all.connectMulti(arSeq(0, 1, 28), [[21], [22], [23], [24], [25], [26], [13], [14], [15], [16], [17], [18], [19], [20], [], [], [], [], [], [], [], [1, 7], [2, 8], [3, 9], [4, 10], [5, 11], [6, 12], [27]]);
+  let reg = new standardRegenerateHub();
+  all.flows.push(reg);
+  all.baseFlows.push(reg); // 27.
+  all.connectMulti(arSeq(0, 1, 28), [[21], [22], [23], [24], [25], [26], [13], [14], [15], [16], [17], [18], [19], [20], [27], [27], [27], [27], [27], [27], [27], [1, 7], [2, 8], [3, 9], [4, 10], [5, 11], [6, 12], [0]]);
   // 次にgenerateGimic
-  all.completeGimic.push(new generateGimic(27, [0]));
+  //all.completeGimic.push(new generateGimic(27, [0]));
   // 生成用のactor
-  let generateRunner = new actor(all.getFlow(27));
-  generateRunner.activate();
-  all.actors.push(generateRunner); // 走るだけ
+  //let generateRunner = new actor(all.getFlow(27));
+  //generateRunner.activate();
+  //all.actors.push(generateRunner); // 走るだけ
+  all.registActor([0, 0, 0, 0, 0, 0, 0], [1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6], arSeq(0, 1, 7));
+  all.activateAll();
 }
 
 function createPattern6(){
@@ -877,24 +1019,28 @@ function createPattern6(){
   let posX = [100, 200, 300, 400, 500, 500, 400, 300, 200, 100];
   let posY = constSeq(100, 5).concat(constSeq(400, 5));
   let vecs = getVector(posX, posY);
-  let paramSet = getEasingFlow(vecs, 'orbitalEasing', constSeq(0, 5), constSeq(0, 5), constSeq(0.1, 5), constSeq(120, 5), [0, 1, 2, 3, 4], [5, 6, 7, 8, 9]);
+  let paramSet = getEasingFlow(vecs, 'orbitalEasing', constSeq(5, 5), constSeq(0, 5), constSeq(0.1, 5), constSeq(120, 5), [0, 1, 2, 3, 4], [5, 6, 7, 8, 9]);
   all.registFlow(paramSet);
   // 次にorientedを5つ。
   posX = arSinSeq(0, 2 * PI / 5, 5, 200, 300);
   posY = arCosSeq(0, 2 * PI / 5, 5, -100, 300);
   vecs = getVector(posX, posY);
-  paramSet = getEasingFlow(vecs, 'oriented', constSeq(0, 5), constSeq(0, 5), constSeq(0.1, 5), constSeq(120, 5), [0, 1, 2, 3, 4]);
+  paramSet = getEasingFlow(vecs, 'oriented', constSeq(5, 5), constSeq(0, 5), constSeq(0.1, 5), constSeq(120, 5), [0, 1, 2, 3, 4]);
   all.registFlow(paramSet);
   // 次にvectorFlowを5つ。
   posX = constSeq(0, 5);
   posY = constSeq(-150, 5);
   vecs = getVector(posX, posY);
-  paramSet = getEasingFlow(vecs, 'vector', constSeq(0, 5), constSeq(0, 5), constSeq(0.1, 5), constSeq(120, 5), [0, 1, 2, 3, 4]);
+  paramSet = getEasingFlow(vecs, 'vector', constSeq(5, 5), constSeq(0, 5), constSeq(0.1, 5), constSeq(120, 5), [0, 1, 2, 3, 4]);
   all.registFlow(paramSet);
   // つなげましょう
   all.connectMulti([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [[5], [6], [7], [8], [9], [10], [11], [12], [13], [14]]);
   all.registActor([0, 1, 2, 3, 4], [1, 1, 1, 1, 1], [0, 1, 2, 3, 4]);
   all.activateAll(); // 実験はこのくらいでいいんで次行きましょう
+}
+
+function createPattern7(){
+  //
 }
 
 // --------------------------------------------------------------------------------------- //
@@ -994,18 +1140,15 @@ function getEasingFlow(vecs, typename, idSet1, idSet2, ratioSet, spanSet, firstV
   return paramSet;
 }
 
-function funcP0(r){
-  return r*r;
-}
+function funcP0(x){ return x; } // 通常。
+function funcP1(x){ return 3 * pow(x, 2) - 2 * pow(x, 3); } // 2乗で入って3乗で出る
+function funcP2(x){ return 3 * pow(x, 4) - 2 * pow(x, 6); } // 4乗で入って6乗で出る
+function funcP3(x){ return x * (2 * x - 1); } // バックイン
+function funcP4(x){ return 1 + (1 - x) * (2 * x - 1); } // バックアウト
+function funcP5(x){ return -12 * pow(x, 3) + 18 * pow(x, 2) - 5 * x; } // バックインアウト
+function funcP6(x){ return (x / 8) + (7 / 8) * pow(x, 4); } // ゆっくり からの ぎゅーーーん
+function funcP7(x){ return (7 / 8) + (x / 8) - (7 / 8) * pow(1 - x, 4); } // ぎゅーーーん からの ゆっくり
+function funcP8(x){ return 0.5 * (1 - cos(9 * PI * x)); } // 波打つやつ
 
-function funcP1(r){
-  return r;
-}
-
-function funcN0(r){
-  return sin(2 * PI * r);
-}
-
-function funcN1(r){
-  return 0;
-}
+function funcN0(x){ return 0; }
+function funcN1(x){ return sin(10 * PI * x); }
