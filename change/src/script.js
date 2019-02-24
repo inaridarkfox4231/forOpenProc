@@ -7,7 +7,7 @@ let palette; // カラーパレット
 let parallelFunc = [funcP0, funcP1, funcP2, funcP3, funcP4, funcP5, funcP6, funcP7, funcP8];
 let normalFunc = [funcN0, funcN1];
 
-const PATTERN_NUM = 8;
+const PATTERN_NUM = 10;
 const COLOR_NUM = 7;
 
 const IDLE = 0;
@@ -175,6 +175,24 @@ class assembleHub extends flow{
   }
 }
 
+class assembleRotaryHub extends assembleHub{
+  // アセンブルハブで、かつcloseのたびに行先が変わる。MassGameなどで重宝する。
+  constructor(limit){
+    super(limit);
+    // -1から始まって0, 1, 2, ..., n-1, 0って感じで。
+  }
+  execute(_actor){
+    if(this.open){
+      _actor.setState(COMPLETED);
+      this.volume--; // 出て行ったら減らす
+      if(this.volume === 0){
+        this.nextFlowIndex = (this.nextFlowIndex + 1) % this.convertList.length; // この一行のみ追加。
+        this.open = false;
+      } // 閉じるタイミングで行先を変える
+    } // 開いてるなら行って良し
+  }
+}
+
 class killHub extends flow{
   // 殺すだけ
   constructor(){ super(); }
@@ -269,6 +287,18 @@ class standardRegenerateHub extends flow{
 // standard. これの他に、サイズとか形とかランダムのやつ作るつもり。とりあえずこれは形とサイズ固定。
 // colorIdでなくcolorを取るようにして移動してる間に特定のcolorめがけてグラデするとかそういうのをね・・
 // posもcolorもactorによってそれを変化させるコンポジションの一部でしかないらしいよ
+
+class rotaryHub extends flow{
+  // actorが通過するたびに最初0, 次1, ...とローテーションで変化する
+  constructor(){
+    super();
+    this.nextFlowIndex = 0; // 次の行先は存在していて0から順に増えていって巡回する
+  }
+  convert(_actor){
+    _actor.setFlow(this.convertList[this.nextFlowIndex]);
+    this.nextFlowIndex = (this.nextFlowIndex + 1) % this.convertList.length;
+  }
+}
 
 // generateHubは特定のフローに・・あーどうしよかな。んー。。
 // こういうの、なんか別の概念が必要な気がする。convertしないからさ。違うでしょって話。
@@ -487,6 +517,9 @@ class vectorFlow extends easingFlow{
     this.setSpanTime(_actor);
     this.calcDiffVector();
     _actor.timer.reset();
+  }
+  setDirectionVector(newVector){ // 直接vectorをいじれる
+    this.directionVector = newVector;
   }
 }
 
@@ -714,6 +747,7 @@ class generateGimic extends Gimic{
   }
 }
 
+// Revolve無理でした（そりゃそうだー）
 
 // コードの再利用ができるならこれを複数バージョンに・・って事も出来るんだけどね
 
@@ -737,11 +771,12 @@ class entity{
     this.actors = [];
     this.initialGimic = [];  // flow開始時のギミック
     this.completeGimic = []; // flow終了時のギミック
-    this.patternIndex = 7; // うまくいくのかな・・
-    this.patternArray = [createPattern0, createPattern1, createPattern2, createPattern3, createPattern4, createPattern5, createPattern6, createPattern7];
+    this.patternIndex = 9; // うまくいくのかな・・
+    this.patternArray = [createPattern0, createPattern1, createPattern2, createPattern3, createPattern4, createPattern5, createPattern6, createPattern7, createPattern8, createPattern9];
   }
   getFlow(givenIndex){
     for(let i = 0; i < this.flows.length; i++){
+      console.log(this.flows);
       if(this.flows[i].index === givenIndex){ return this.flows[i]; break; }
     }
     return undefined; // forEachだとreturnで終わってくれないことを知った
@@ -808,7 +843,7 @@ class entity{
   connect(index, nextIndexList){
     // index番のflowの行先リストをnextIndexListによって作る
     nextIndexList.forEach(function(nextIndex){
-      //console.log(index);
+      console.log(index);
       //console.log(this.getFlow(index));
       this.getFlow(index).convertList.push(this.getFlow(nextIndex));
     }, this)
@@ -1058,11 +1093,35 @@ function createPattern7(){
   //console.log(h3);
   all.flows = all.flows.concat([h1, h2, h3]);
   //console.log(all.flows[26]);
-  all.baseFlows.concat([h1, h2, h3]);
+  all.baseFlows = all.baseFlows.concat([h1, h2, h3]);
   all.connectMulti(arSeq(0, 1, 29), [[1, 3], [4], [0], [7], [26], [2, 6], [7], [26], [15], [2, 6], [7], [14], [5], [9], [10, 13], [19], [28], [16], [23], [23], [24], [16], [27], [25], [21], [22], [11, 8], [18, 17], [20, 12]]);
   all.registActor([0], [2], [0]);
   all.activateAll();
 }
+function createPattern8(){
+  let posX = multiSeq(arSeq(120, 60, 5), 3).concat([60, 60, 360]);
+  let posY = jointSeq([constSeq(60, 5), constSeq(120, 5), constSeq(180, 5)]).concat([120, 240, 240]);
+  let vecs = getVector(posX, posY);
+  let paramSet = getOrbitalFlow(vecs, [5, 5, 0, 5, 5, 5, 10, 1, 6, 11, 2, 12, 7, 7, 7, 3, 4, 8, 9, 13, 14, 17 ,16, 15], [0, 10, 1, 1, 6, 11, 11, 2, 7, 12, 7, 7, 3, 8, 13, 4, 9, 9, 14, 14, 17, 16, 15, 5], 'straight');
+  all.registFlow(paramSet);
+  let h1 = new rotaryHub();
+  let h2 = new assembleRotaryHub(5);  // あ、そうか、limitで初期化するんだっけ。
+  all.flows = all.flows.concat([h1, h2]);
+  all.baseFlows = all.baseFlows.concat([h1, h2]);
+  // ちょっとばかし線を追加しますか
+  paramSet = getOrbitalFlow(vecs, [0, 10, 1, 11], [6, 6, 6, 6], 'straight');
+  all.registFlow(paramSet);
+  all.connectMulti(arSeq(0, 1, 30), [[2, 26], [6, 27], [7, 28], [7, 28], [8], [9, 29], [9, 29], [10], [25], [11], [25], [25], [15], [17], [19], [16], [18], [18], [20], [20], [21], [22], [23], [24], [0, 3, 4, 5, 1], [12, 13, 14], [8], [8], [8], [8]]);
+  all.registActor([22, 22, 22, 22, 22], [1.6, 1.8, 2.0, 2.2, 2.4], [0, 1, 2, 3, 4]);
+  all.activateAll();
+  // すばらしい。かんぺき。rotaryは順繰りに行先を変えてくれるので同じハブからいろんなflowにつなげる。
+  // assembleRotaryは集まるごとに行先が変わるのでMassGameなどに使える。
+}
+function createPattern9(){
+  // いけるはず。たぶん。revolveもたぶん。。
+}
+
+// 速度を与えて毎フレームその分だけ移動するとか？その場合イージングはどうなる・・
 
 // --------------------------------------------------------------------------------------- //
 // utility.
