@@ -267,6 +267,8 @@ class standardRegenerateHub extends flow{
   }
 }
 // standard. これの他に、サイズとか形とかランダムのやつ作るつもり。とりあえずこれは形とサイズ固定。
+// colorIdでなくcolorを取るようにして移動してる間に特定のcolorめがけてグラデするとかそういうのをね・・
+// posもcolorもactorによってそれを変化させるコンポジションの一部でしかないらしいよ
 
 // generateHubは特定のフローに・・あーどうしよかな。んー。。
 // こういうの、なんか別の概念が必要な気がする。convertしないからさ。違うでしょって話。
@@ -591,7 +593,9 @@ actor.index = 0; // 0, 1, 2, 3, ....
 // たとえばアイテムとか、オブジェクト的な奴とか。回転しないことも考慮しないとなぁ。
 class figure{
   constructor(colorId, figureId = 0, sizeFactor = 0.8){
-    this.colorId = colorId; // 0~6の値
+    this.colorId = colorId; // 0~6の値 // colorにしてグラデいじるのはMassGameの方でやることにしました
+    // shootingGameの方でもグラデ使いたいんだけどどうすっかなー、ま、どうにでもできるか。
+    // こういうのどうにでもできる強さがあればいいんじゃない？はやいとこ色々作りたいよ。
     this.figureId = figureId; // 図形のタイプ
     this.sizeFactor = sizeFactor; // おおきさ
     this.graphic = createGraphics(40, 40);
@@ -1026,13 +1030,13 @@ function createPattern6(){
   posX = arSinSeq(0, 2 * PI / 5, 5, 200, 300);
   posY = arCosSeq(0, 2 * PI / 5, 5, -100, 300);
   vecs = getVector(posX, posY);
-  paramSet = getEasingFlow(vecs, 'oriented', constSeq(5, 5), constSeq(0, 5), constSeq(0.1, 5), constSeq(120, 5), [0, 1, 2, 3, 4]);
+  paramSet = getEasingFlow(vecs, 'oriented', constSeq(7, 5), constSeq(0, 5), constSeq(0.1, 5), constSeq(120, 5), [0, 1, 2, 3, 4]);
   all.registFlow(paramSet);
   // 次にvectorFlowを5つ。
   posX = constSeq(0, 5);
   posY = constSeq(-150, 5);
   vecs = getVector(posX, posY);
-  paramSet = getEasingFlow(vecs, 'vector', constSeq(5, 5), constSeq(0, 5), constSeq(0.1, 5), constSeq(120, 5), [0, 1, 2, 3, 4]);
+  paramSet = getEasingFlow(vecs, 'vector', constSeq(8, 5), constSeq(0, 5), constSeq(0.1, 5), constSeq(120, 5), [0, 1, 2, 3, 4]);
   all.registFlow(paramSet);
   // つなげましょう
   all.connectMulti([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [[5], [6], [7], [8], [9], [10], [11], [12], [13], [14]]);
@@ -1157,6 +1161,7 @@ function getEasingFlow(vecs, typename, idSet1, idSet2, ratioSet, spanSet, firstV
   return paramSet;
 }
 
+// イージングに引数取るようにしたら面白そう
 function funcP0(x){ return x; } // 通常。
 function funcP1(x){ return 3 * pow(x, 2) - 2 * pow(x, 3); } // 2乗で入って3乗で出る
 function funcP2(x){ return 3 * pow(x, 4) - 2 * pow(x, 6); } // 4乗で入って6乗で出る

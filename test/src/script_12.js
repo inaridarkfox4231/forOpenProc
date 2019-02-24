@@ -1,28 +1,42 @@
 'use strict';
+let s;
 
-class dummy{
-  constructor(n){
-    this.n = n;
+class colorSquare{
+  constructor(){
+    this.myColor = color(0, 100, 100);
+    this.pos = createVector(0, 0);
   }
-  getN(){ return this.n; }
+  update(){
+    this.pos.set(mouseX, mouseY);
+  }
+  draw(){
+    translate(this.pos.x, this.pos.y);
+    noStroke();
+    fill(this.myColor);
+    rect(-10, -10, 20, 20);
+  }
 }
 
 function setup(){
-  let p = [];
-  for(let i = 0; i < 20; i++){ p.push(new dummy(i)); }
-  let q = [p[0], p[1], p[2]];
-  console.log(p[0].n);
-  q[0].n = 188;
-  console.log(p[0].n);
-  let dm = new dummy(5);
-  let a = triv;
-  console.log(a(dm));
+  createCanvas(200, 200);
+  colorMode(HSB);
+  s = new colorSquare();
 }
 
 function draw(){
-
+  background(0, 20, 100);
+  s.update();
+  s.draw();
 }
 
-function triv(_dummy){
-  return _dummy.getN();
+function keyTyped(){
+  if(key === 'a'){
+    let a = saturation(s.myColor);
+    s.myColor = color(0, a - 1, 100);
+  }
+  if(key === 'b'){
+    let b = hue(s.myColor);
+    s.myColor = color(b + 1, 100, 100);
+  }
 }
+// colorをactorでいじればいろいろ面白いことができるようになるはず。
