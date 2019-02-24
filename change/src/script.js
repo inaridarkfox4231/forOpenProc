@@ -200,6 +200,7 @@ class colorSortHub extends flow{
 class gateHub extends flow{
   // gateHubはforLoopを模式化したもので、そこを何回も訪れたactorに別の行先を提供するもの。
   constructor(norma){
+    super();
     this.norma = norma; // 必要周回数
     this.register = []; // 周回数を記録する登録用の配列
   }
@@ -207,20 +208,28 @@ class gateHub extends flow{
     // actorIdのactorが登録されているか調べてそのindexを返す、登録されてない時は-1を返す。
     let index = -1;
     for(let i = 0; i < this.register.length; i++){
-      if(this.register[i]['id'] === actorId){ index = i; }
+      console.log(this.register[i]['id']);
+      if(this.register[i]['id'] === actorId){ index = i; break; }
     }
+    console.log('index = %d', index);
     return index;
   }
   convert(_actor){
     // normaに満たない時は0に、満たすときは1に流す。
-    let index = this.getIndex(_actor);
+    let index = this.getIndex(_actor.index);
     if(index < 0){
-      this.register.push({id:_actor.index, loopCount:0}); // リストにない時は新規登録
+      let dict = {id:_actor.index, loopCount:0};
+      console.log(dict);
+      this.register.push(dict); // リストにない時は新規登録
+      console.log(this.register.length);
       index = this.register.length - 1; // indexをそのactorの存在番号で更新
     }else{
-      this.register[index]['loopCount']++; // リストにあるときは周回数を増やす
+      console.log("ふやす");
+      this.register[index]['loopCount'] += 1; // リストにあるときは周回数を増やす
     }
-    if(this.register[index] < this.norma){
+    console.log(this.register.length);
+    if(this.register[index]['loopCount'] < this.norma){
+      console.log('ループカウント = %d', this.register[index]['loopCount']);
       this.nextFlowIndex = 0;
     }else{
       this.nextFlowIndex = 1;
@@ -507,11 +516,7 @@ class actor{
     if(this.state === IN_PROGRESS){
       this.in_progressAction();
     }else if(this.state === COMPLETED){
-      //console.log(555);
-      //if(this.currentFlow.index === 19){ console.log("Hello"); console.log(this.visible); }
-      //console.log(555);
       this.completeAction();
-      //if(this.currentFlow.index === 19){ console.log("Hello"); }
     }
     // completeGimicが入るのはここ。
     // IN_PROGRESSのあとすぐにCOMPLETEDにしないことでGimicをはさむ余地を与える.
@@ -526,11 +531,7 @@ class actor{
   }
   completeAction(){
     this.setState(IDLE);
-    //console.log(this.currentFlow.index);
-    //console.log(this.state);
     this.currentFlow.convert(this); // ここで行先が定められないと[IDLEかつundefined]いわゆるニートになります（おい）
-    //console.log("333");
-    //console.log(this.currentFlow.index);
   }
   kill(){
     // 自分を排除する
@@ -565,7 +566,6 @@ class movingActor extends actor{
   // 今ここにsetVisualを作りたい。色id, サイズとか形とか。
   setVisual(newColorId, newFigureId, newSizeFactor){
     this.visual.reset(newColorId, newFigureId, newSizeFactor);
-    //console.log(this.visual);
   }
   show(){ this.visible = true; }   // 姿を現す
   hide(){ this.visible = false; }  // 消える
@@ -606,9 +606,7 @@ class figure{
     img.noStroke();
     img.fill(palette[colorId]);
     let r = 10 * sizeFactor;
-    //console.log(figureId);
     if(figureId === 0){
-      //console.log("square");
       img.rect(20 - r, 20 - r, 2 * r, 2 * r);
     }else if(figureId === 1){
       r *= 1.1;
@@ -678,7 +676,6 @@ class inActivateGimic extends Gimic{
   }
   action(_actor){
     _actor.inActivate(); // 踏んだ人をinActivateするだけ
-    //console.log(_actor.isActive);
   }
 }
 
@@ -736,7 +733,7 @@ class entity{
     this.actors = [];
     this.initialGimic = [];  // flow開始時のギミック
     this.completeGimic = []; // flow終了時のギミック
-    this.patternIndex = 5; // うまくいくのかな・・
+    this.patternIndex = 7; // うまくいくのかな・・
     this.patternArray = [createPattern0, createPattern1, createPattern2, createPattern3, createPattern4, createPattern5, createPattern6, createPattern7];
   }
   getFlow(givenIndex){
@@ -807,6 +804,8 @@ class entity{
   connect(index, nextIndexList){
     // index番のflowの行先リストをnextIndexListによって作る
     nextIndexList.forEach(function(nextIndex){
+      //console.log(index);
+      //console.log(this.getFlow(index));
       this.getFlow(index).convertList.push(this.getFlow(nextIndex));
     }, this)
   }
@@ -814,6 +813,8 @@ class entity{
     // IndexListに書かれたindexのflowにまとめて指定する
     // たとえば[6, 7, 8], [[2], [3], [4, 5]] ってやると6に2, 7に3, 8に4, 5が指定される
     for(let i = 0; i < indexList.length; i++){
+      //console.log(i);
+      //console.log(nextIndexListArray[i]);
       this.connect(indexList[i], nextIndexListArray[i]);
     }
   }
@@ -1040,7 +1041,23 @@ function createPattern6(){
 }
 
 function createPattern7(){
-  //
+  // forの実験
+  let posX = jointSeq([arSeq(200, 100, 3), arSeq(100, 100, 5), arSeq(200, 100, 3), arSeq(100, 100, 5), arSeq(100, 100, 4)]);
+  let posY = jointSeq([constSeq(100, 3), constSeq(200, 5), constSeq(300, 3), constSeq(400, 5), constSeq(500, 4)]);
+  let vecs = getVector(posX, posY);
+  let paramSet = getOrbitalFlow(vecs, [0, 1, 4, 1, 2, 3, 4, 5, 6, 8, 9, 6, 11, 9, 10, 7, 12, 13, 13, 15, 11, 17, 18, 14, 16, 19], [1, 2, 0, 5, 6, 4, 5, 6, 7, 4, 5, 10, 3, 8, 9, 15, 11, 12, 14, 14, 16, 12, 13, 19, 17, 18], 'straight');
+  all.registFlow(paramSet);
+  let h1 = new gateHub(3);
+  //console.log(h1);
+  let h2 = new gateHub(4);
+  let h3 = new gateHub(5);
+  //console.log(h3);
+  all.flows = all.flows.concat([h1, h2, h3]);
+  //console.log(all.flows[26]);
+  all.baseFlows.concat([h1, h2, h3]);
+  all.connectMulti(arSeq(0, 1, 29), [[1, 3], [4], [0], [7], [26], [2, 6], [7], [26], [15], [2, 6], [7], [14], [5], [9], [10, 13], [19], [28], [16], [23], [23], [24], [16], [27], [25], [21], [22], [11, 8], [18, 17], [20, 12]]);
+  all.registActor([0], [2], [0]);
+  all.activateAll();
 }
 
 // --------------------------------------------------------------------------------------- //
