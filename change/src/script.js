@@ -7,7 +7,7 @@ let palette; // カラーパレット
 let parallelFunc = [funcP0, funcP1, funcP2, funcP3, funcP4, funcP5, funcP6, funcP7, funcP8];
 let normalFunc = [funcN0, funcN1];
 
-const PATTERN_NUM = 9;
+const PATTERN_NUM = 10;
 const COLOR_NUM = 7;
 
 const DIRECT = 0; // orientedFlowの位置指定、直接指定。
@@ -130,8 +130,6 @@ class flow{
       _actor.setFlow(this.convertList[this.nextFlowIndex]);
     } // 次のflowが与えられるならそのままisActive継続、次の処理へ。
     // わざとこのあとinActivateにして特定の条件下でactivateさせても面白そう。
-    //console.log(this.index);
-    //console.log(_actor.currentFlow);
   }
   display(gr){} // 一応書いておかないと不都合が生じそうだ
 }
@@ -229,10 +227,8 @@ class gateHub extends flow{
     // actorIdのactorが登録されているか調べてそのindexを返す、登録されてない時は-1を返す。
     let index = -1;
     for(let i = 0; i < this.register.length; i++){
-      //console.log(this.register[i]['id']);
       if(this.register[i]['id'] === actorId){ index = i; break; }
     }
-    //console.log('index = %d', index);
     return index;
   }
   convert(_actor){
@@ -240,17 +236,12 @@ class gateHub extends flow{
     let index = this.getIndex(_actor.index);
     if(index < 0){
       let dict = {id:_actor.index, loopCount:0};
-      //console.log(dict);
       this.register.push(dict); // リストにない時は新規登録
-      //console.log(this.register.length);
       index = this.register.length - 1; // indexをそのactorの存在番号で更新
     }else{
-      //console.log("ふやす");
       this.register[index]['loopCount'] += 1; // リストにあるときは周回数を増やす
     }
-    //console.log(this.register.length);
     if(this.register[index]['loopCount'] < this.norma){
-      //console.log('ループカウント = %d', this.register[index]['loopCount']);
       this.nextFlowIndex = 0;
     }else{
       this.nextFlowIndex = 1;
@@ -270,7 +261,6 @@ class standardRegenerateHub extends flow{
     this.newSpeed = newSpeed;
     this.newFigureId = newFigureId;
     this.newSizeFactor = newSizeFactor;
-    //console.log(2);
   }
   execute(_actor){
     // -1のときはランダム
@@ -283,7 +273,6 @@ class standardRegenerateHub extends flow{
     _actor.visual.colorId = colorId; // カラーインデックスを更新
     _actor.activate(); // non-Activeになってるのを想定してもいる
     _actor.show(); // 消えてるなら姿を現す
-    //console.log(_actor);
     _actor.setState(COMPLETED); // ここ"COMPLETED"にしてた信じられない
   }
 }
@@ -342,9 +331,6 @@ class jumpFlow extends orbitalFlow{
     let newX = map(progress, 0, 1, this.from.x, this.to.x);
     let newY = map(progress, 0, 1, this.from.y, this.to.y) - 2 * this.span * progress * (1 - progress);
     _actor.setPos(newX, newY);
-    //_actor.pos.x = map(progress, 0, 1, this.from.x, this.to.x);
-    //_actor.pos.y = map(progress, 0, 1, this.from.y, this.to.y);
-    //_actor.pos.y -= 2 * this.span * progress * (1 - progress); // 高さはとりあえずthis.span/2にしてみる
   }
 }
 
@@ -358,8 +344,6 @@ class straightFlow extends orbitalFlow{
     // 直線
     let progress = this.getProgress(_actor, _actor.speed * this.factor); // 速くなったり遅くなったり
     _actor.setPos(map(progress, 0, 1, this.from.x, this.to.x), map(progress, 0, 1, this.from.y, this.to.y));
-    //_actor.pos.x = map(progress, 0, 1, this.from.x, this.to.x);
-    //_actor.pos.y = map(progress, 0, 1, this.from.y, this.to.y);
   }
   display(gr){
     // 線を引くだけです（ビジュアル要らないならなんかオプション付けてね・・あるいは、んー）
@@ -434,17 +418,10 @@ class easingFlow extends flow{
     this.easeId_parallel = easeId_parallel;
     this.easeId_normal = easeId_normal;
     this.ratio = ratio // 垂直イージングの限界の距離に対する幅。
-    //this.from; // 予めがっちり決めるのがorbital, 行先だけ決めるのがoriented, 方向と距離だけ決めるのがvector
-    //this.to; // _actorにより異なるのはfromだけ、のはず。
-    this.spanTime = spanTime; // 所要フレーム数（デフォルトはfromからtoまでの距離をスピードで割ったもの）
-    //this.diffVector; // 垂直方向へのずれ。_actorにより異なる。
+    this.spanTime = spanTime; // 所要フレーム数（デフォルトはやめた）
+    // fromとかtoとかdiffVectorはactorごとに管理することにした。
+    // あるいはbulletクラスを用意してそういうの持ってるようにすれば辞書要らないけどな
   }
-  //setSpanTime(_actor){
-    //if(this.spanTime < 0){
-    //  this.spanTime = p5.Vector.dist(this.from, this.to) / _actor.speed; // fromとtoが決まった後で適切に呼び出す
-    //}
-    // 種類ごとに違う
-  //}
   calcDiffVector(fromVector, toVector){ // 引数にしてしまおう
     let diffVector;
     if(this.ratio < 10){
@@ -457,33 +434,14 @@ class easingFlow extends flow{
     }
     return diffVector;
   }
-  //initialize(_actor){
-    //this.setSpanTime(_actor);
-    //this.calcDiffVector();
-    //_actor.timer.reset();
-    // 辞書に登録するかどうかとかいろいろ処理が異なるので・・
-  //}
   getProgress(_actor){
     _actor.timer.step(); // 1ずつ増やす
     let cnt = _actor.timer.getCnt();
     if(cnt >= this.spanTime){ return 1; } // 1を返す
-    //if(cnt >= this.spanTime){
-    //  cnt = this.spanTime;
-    //  _actor.setState(COMPLETED);
-    //}  // 処理の切り分けがうまくいってないな。これexecuteに書く内容でしょ
-    return cnt / this.spanTime;
+    return cnt / this.spanTime; // 1を返すときcompleteになるよう修正
   }
-  //execute(_actor){
-    // これも全く異なる、まあ基本は一緒だけど。
-    //let progress = this.getProgress(_actor);
-    //let easedProgress = parallelFunc[this.easeId_parallel](progress);
-    //let normalDiff = normalFunc[this.easeId_normal](progress);
-    //_actor.pos.x = map(easedProgress, 0, 1, this.from.x, this.to.x);
-    //_actor.pos.y = map(easedProgress, 0, 1, this.from.y, this.to.y);
-    //let easeVectorN = p5.Vector.mult(this.diffVector, normalDiff);
-    //_actor.pos.add(easeVectorN);
-  //}
 }
+// 気付いたけど移動ってcntの進め方がすべてだからcntをキー操作でできるようにしたらそれで終わりなんじゃ・・？
 
 // fromもtoもdiffVectorもこっちもち
 // こっちはばりばりのorbitalFlowにイージングかけてる従来の形のflowなのです。
@@ -495,15 +453,12 @@ class orbitalEasingFlow extends easingFlow{
     this.from = from;
     this.to = to; // fromとtoがベクトルで与えられる最も一般的な形
     this.diffVector;
+    this.spanTime = spanTime // -1指定一旦やめよう。面倒くさくなってきた。固定でいいよ。
   }
   initialize(_actor){
     _actor.pos.set(this.from.x, this.from.y); // orbitalなので初期位置を設定
-    //this.setSpanTime(_actor);
-    if(this.spanTime < 0){
-      this.spanTime = p5.Vector.dist(this.from, this.to) / _actor.speed // -1のときは距離
-    }
     this.diffVector = this.calcDiffVector(this.from, this.to); // fromとtoから計算
-    _actor.timer.reset();
+    _actor.timer.reset(); // spanTimeは具体的な指定以外禁止にしました（めんどい）
   }
   execute(_actor){
     // これも全く異なる、まあ基本は一緒だけど。
@@ -521,60 +476,83 @@ class orbitalEasingFlow extends easingFlow{
 }
 
 // あー・・両方一緒だ。
-// 基本的にrevolverGimicと組み合わせて使う。
-// イメージ的にはあれ、銃を撃つイメージ。
-// revolverが一つだけなら打ち出す方向とかもね。位置指定は例えていうなら目標を位置ベースで具体的に指定、
-// 方向と距離を指定するならそれは銃口をぐるぐる回すイメージですかね。
-// revolverがなければ銃は撃てない。
-// ・・・・とおもったけどGimic要らないな。。。。
-// やっぱGimic要らないんだな・・
 // Gimicが要らないとは言ってない。使い方が間違ってるってだけ。
 
 // 名前muzzleにしよう
-class muzzle extends easingFlow{
-  constructor(easeId_parallel, easeId_normal, ratio, spanTime, kind, infoVectorArray){
+// mode増やそう。revolveのモード。simple, rect, ellipse, fan, rotation, parallelの6種類
+class orientedMuzzle extends easingFlow{
+  constructor(easeId_parallel, easeId_normal, ratio, spanTime, kind, infoVectorArray, mode){
     super(easeId_parallel, easeId_normal, ratio, spanTime);
     //this.infoVector; // 情報ベクトル
     //this.kind; // toの指定の仕方（DIRECT:位置を直接指定、DIFF:ベクトルで指定）
     this.register = [];
     this.kind = kind; // DIRECTなら目標地点ベース、DIFFならベクトルベース
     this.infoVectorArray = infoVectorArray; // 位置だったりベクトルの集合
-    this.currentIndex = 0;
+    this.currentIndex = -1; // simpleはまず1つ進めてからなので初期値を-1にしておかないと。てかsimpleでしか使わないな・・
+    this.revolveMode = mode;
   }
-  revolve(){
+  getInfoVector(){
     // 銃口を回す
-    this.currentIndex = (this.currentIndex + 1) % this.infoVectorArray.length
+    if(this.revolveMode === 0){ // simple. 1つ進める。reverseは配列を鏡写しで2倍にすればいい。([0, 1 ,2, 3, 2, 1]とか)
+      this.currentIndex = (this.currentIndex + 1) % this.infoVectorArray.length;
+      return this.infoVectorArray[this.currentIndex];
+    }else if(this.revolveMode === 1){ // rect.
+      // [v0, v1]としてv0(左上)からv1(右下)までの範囲に指定する。DIRECTを想定。
+      let leftUp = this.infoVectorArray[0];
+      let rightDown = this.infoVectorArray[1];
+      let x = leftUp.x + random(rightDown.x - leftUp.x);
+      let y = leftUp.y + random(rightDown.y - leftUp.y);
+      return createVector(x, y);
+    }else if(this.revolveMode === 2){ // ellipse.
+      // [v0, v1]としてv0中心、横半径v1[0], 縦半径v1[1]の範囲に指定する。DIRECTを想定。
+      let centerVector = this.infoVectorArray[0];
+      let sizeVector = this.infoVectorArray[1];
+      let r = random(1);
+      let theta = random(2 * PI);
+      return createVector(centerVector.x + r * sizeVector.x * cos(theta), centerVector.y + r * sizeVector.y * sin(theta));
+    }else if(this.revolveMode === 3){ // fan.
+      // [v0, v1]としてv0からv1へ時計回りに回すとしてその間のどれかを返す。DIFFを想定。
+      let v0 = this.infoVectorArray[0];
+      let v1 = this.infoVectorArray[1];
+      let theta0 = atan2(v0.y, v0.x);
+      let theta1 = (atan2(v1.y, v1.x) + 2 * PI) % (2 * PI);
+      let theta = theta0 + random(theta1 - theta0);
+      let r = random((v0.mag() + v1.mag()) / 2);
+      return createVector(r * cos(theta), r * sin(theta));
+    }else if(this.revolveMode === 4){ // rotation.
+      // [v0, v1, v2]としてv2は初期値v0で、v1=[r, θ]としてr倍、θ回転したものを作り続ける。
+      let v0 = this.infoVectorArray[0];
+      let v1 = this.infoVectorArray[1];
+      let v2 = this.infoVectorArray[2];
+      v2.mult(v1.x);
+      let currentTheta = atan2(v2.y, v2.x);
+      currentTheta += v1.y;
+      v2.rotate(v1.y);
+      return v2;
+    }else if(this.revolveMode === 5){ // parallel;
+      // [v0, v1, v2]としてv2は初期値v0で、v1 = [a, b]としてこれを足したものを作り続ける。
+      let v0 = this.infoVectorArray[0];
+      let v1 = this.infoVectorArray[1];
+      let v2 = this.infoVectorArray[2];
+      v2.add(v1);
+      return v2;
+    }
   }
-  //setting(kind, infoVector){
-    // revolverで指定する
-  //  this.kind = kind; // DIRECTかDIFFか
-  //  this.infoVector = infoVector;
-  //}
   regist(_actor){
     // revolverGimicでこれを呼び出して先に登録しちゃう
     let dict = {};
     dict['id'] = _actor.index;
     dict['from'] = _actor.pos;
+    let infoVector = this.getInfoVector(); // ベクトルはここで計算する
     if(this.kind === DIRECT){
-      dict['to'] = this.infoVectorArray[this.currentIndex];
+      dict['to'] = infoVector;
     }else{
-      //infoVector.add(_actor.pos); // この場合はinfoだけずらす
-      let toVector = p5.Vector.add(_actor.pos, this.infoVectorArray[this.currentIndex]);
+      let toVector = p5.Vector.add(_actor.pos, infoVector);
       dict['to'] = toVector;
     }
-    this.revolve(); // 別の行先にしておく
     dict['diffVector'] = this.calcDiffVector(dict['from'], dict['to']);
-    //this.register.push(dict);
-    //let index = this.register.length - 1; // このときのindex
-    // 同時にspanTimeも登録
-    if(this.spanTime < 0){
-      // -1のときは個別にspanTimeが必要。(距離なので)
-      dict['spanTime'] = p5.Vector.dist(dict['from'], dict['to']) / _actor.speed;
-    }else{
-      dict['spanTime'] = this.spanTime;
-    }
     this.register.push(dict);
-    console.log(dict);
+    // bulletクラス作ればactorから情報引き出せるけど・・
   }
   getIndex(actorId){
     let correctId = -1;
@@ -589,42 +567,19 @@ class muzzle extends easingFlow{
     this.register.splice(correctId, 1);
   }
   initialize(_actor){
-    //this.from = createVector(_actor.pos.x, _actor.pos.y);
-    //this.setSpanTime(_actor);
-    //let index = this.getIndex(_actor.index);
-    //if(this.spanTime < 0){
-    //  this.spanTime = p5.Vector.dist(this.register[index]['from'], this.register[index]['to']) / _actor.speed // -1の/ときは距離
-    //}
-    //this.calcDiffVector();
-    //console.log("INITIALIZE");
     this.regist(_actor); // 登録
     _actor.timer.reset();
   }
-  //getProgress(_actor){
-  //  _actor.timer.step(); // 1ずつ増やす
-  //  let cnt = _actor.timer.getCnt();
-  //  if(cnt >= this.spanTime){ return 1; } // 1を返す
-    //if(cnt >= this.spanTime){
-    //  cnt = this.spanTime;
-    //  _actor.setState(COMPLETED);
-    //}  // 処理の切り分けがうまくいってないな。これexecuteに書く内容でしょ
-  //  return cnt / this.spanTime;
-  //}
   execute(_actor){
-    //console.log("EXECUTE");
     let index = this.getIndex(_actor.index);
-    // step関連の処理はこっちでやる
-    _actor.timer.step();
-    let cnt = _actor.timer.getCnt();
-    let progress = cnt / this.register[index]['spanTime']; // progressを計算
-    if(cnt >= this.register[index]['spanTime']){ progress = 1; }
-    //let progress = this.getProgress(_actor);
+    let progress = this.getProgress(_actor); // progressを普通に取得。（-1の指定やめた）
     let easedProgress = parallelFunc[this.easeId_parallel](progress);
     let normalDiff = normalFunc[this.easeId_normal](progress);
 
     let fromVector = this.register[index]['from'];
     let toVector = this.register[index]['to'];
     let diffVector = this.register[index]['diffVector'];
+
     _actor.pos.x = map(easedProgress, 0, 1, fromVector.x, toVector.x);
     _actor.pos.y = map(easedProgress, 0, 1, fromVector.y, toVector.y);
     let easeVectorN = p5.Vector.mult(diffVector, normalDiff);
@@ -635,66 +590,6 @@ class muzzle extends easingFlow{
     }
   }
 }
-/*
-// fromだけ固定でtoとdiffVectorは辞書登録
-class orientedFlow extends easingFlow{
-  constructor(easeId_parallel, easeId_normal, ratio, spanTime, to){
-    super(easeId_parallel, easeId_normal, ratio, spanTime);
-    this.to = to;
-    this.register = []; // actorごとのfromとdiffVectorが記された名簿
-  }
-  regist(_actor){
-    // actorのfromとdiffVectorの情報を登録する。revolverはこれを呼び出す感じ
-    let dict = {};
-    dict['id'] = _actor.index;
-    dict['from'] = _actor.pos;
-    dict['diffVector'] = this.calcDiffVector(_actor.pos, this.to);
-    this.register.push(dict);
-  }
-  getIndex(actorId){
-    let correctId = -1;
-    for(let i = 0; i < this.register.length; i++){
-      if(this.register[i]['id'] === actorId){ correctId = i; break; }
-    }
-    return correctId; // -1:Not Found.
-  }
-  delete(actorId){
-    // 登録情報の削除。COMPLETEDの際に呼び出す
-    let correctId = this.getIndex(actorId);
-    this.register.splice(correctId, 1);
-  }
-  initialize(_actor){
-    //this.from = createVector(_actor.pos.x, _actor.pos.y);
-    //this.setSpanTime(_actor);
-    let index = this.getIndex(_actor.index);
-    if(this.spanTime < 0){
-      this.spanTime = p5.Vector.dist(this.register[index]['from'], this.register[index]['to']) / _actor.speed // -1のときは距離
-    }
-    //this.calcDiffVector();
-    _actor.timer.reset();
-  }
-  setDestination(to){ // 直接toをいじれる
-    this.to = to;
-  }
-}
-
-class vectorFlow extends easingFlow{
-  constructor(easeId_parallel, easeId_normal, ratio, spanTime, directionVector){
-    super(easeId_parallel, easeId_normal, ratio, spanTime)
-    this.directionVector = directionVector;
-    this.register = []; // actorごとのfromとtoとdiffVectorが記された名簿
-  }
-  initialize(_actor){
-    this.from = createVector(_actor.pos.x, _actor.pos.y);
-    this.to = p5.Vector.add(this.from, this.directionVector);
-    this.setSpanTime(_actor);
-    this.calcDiffVector();
-    _actor.timer.reset();
-  }
-  setDirectionVector(newVector){ // 直接vectorをいじれる
-    this.directionVector = newVector;
-  }
-}*/
 
 flow.index = 0; // convertに使うflowの連番
 
@@ -731,7 +626,6 @@ class actor{
   }
   idleAction(){
     this.currentFlow.initialize(this); // flowに初期化してもらう
-    //console.log("initialize");
     this.setState(IN_PROGRESS);
   }
   in_progressAction(){
@@ -838,7 +732,8 @@ class figure{
 class rollingFigure extends figure{
   constructor(colorId, figureId = 0, sizeFactor = 0.8){
     super(colorId, figureId, sizeFactor);
-    this.rotation = random(2 * PI);
+    //this.rotation = random(2 * PI);
+    this.rotation = 0; // 0にしよー
   }
   // updateはflowを定めてたとえば小さくなって消えるとか出来るようになるんだけどね（まだ）
   // もしupdateするならactorのupdateに書くことになりそうだけど。
@@ -963,8 +858,8 @@ class entity{
     this.actors = [];
     this.initialGimic = [];  // flow開始時のギミック
     this.completeGimic = []; // flow終了時のギミック
-    this.patternIndex = 6; // うまくいくのかな・・
-    this.patternArray = [createPattern0, createPattern1, createPattern2, createPattern3, createPattern4, createPattern5, createPattern6, createPattern7, createPattern8];
+    this.patternIndex = 9; // うまくいくのかな・・
+    this.patternArray = [createPattern0, createPattern1, createPattern2, createPattern3, createPattern4, createPattern5, createPattern6, createPattern7, createPattern8, createPattern9];
   }
   getFlow(givenIndex){
     for(let i = 0; i < this.flows.length; i++){
@@ -1034,7 +929,7 @@ class entity{
   connect(index, nextIndexList){
     // index番のflowの行先リストをnextIndexListによって作る
     nextIndexList.forEach(function(nextIndex){
-      console.log(index);
+      //console.log(index);
       //console.log(this.getFlow(index));
       this.getFlow(index).convertList.push(this.getFlow(nextIndex));
     }, this)
@@ -1065,8 +960,8 @@ class entity{
       return new colorSortHub(params['targetColor']); // targetColorだけ設定
     }else if(params['type'] === 'orbitalEasing'){
       return new orbitalEasingFlow(params['easeId1'], params['easeId2'], params['ratio'], params['spanTime'], params['from'], params['to']);
-    }else if(params['type'] === 'muzzle'){
-      return new muzzle(params['easeId1'], params['easeId2'], params['ratio'], params['spanTime'], params['kind'], params['infoVectorArray']);
+    }else if(params['type'] === 'orientedMuzzle'){
+      return new orientedMuzzle(params['easeId1'], params['easeId2'], params['ratio'], params['spanTime'], params['kind'], params['infoVectorArray'], params['mode']);
     }else if(params['type'] === 'vector'){
       return new vectorFlow(params['easeId1'], params['easeId2'], params['ratio'], params['spanTime'], params['directionVector']);
     }
@@ -1252,14 +1147,14 @@ function createPattern6(){
   all.connectMulti([0], [[1]]); // 0がひとつめ、1がふたつめ。
   // 追加。
   vecs = getVector([100, -200, -100, -150, -300, -400], [200, -100, -200, -150, 0, 100]);
-  paramSet = getMuzzle(vecs, [7, 8], [1, 0], [0.1, 0.1], [120, 120], [DIFF, DIFF], [[0], [1, 2, 3, 4, 5]]);
+  paramSet = getOrientedMuzzle(vecs, [7, 8], [1, 0], [0.1, 0.1], [120, 120], [DIFF, DIFF], [[0], [1, 2, 3, 4, 5]], [0, 0]);
   all.registFlow(paramSet); // 2と3.
   // 登録するところまでconstructorに書いてしまえ。そうすればregistFlowの時点ですべて終わる。
   // いろいろごちゃごちゃしてるけどやってることは単純明快です。あっちいけ。そんだけ。
   //all.initialGimic.push(new singleMuzzleRevolver(2, DIFF, vecs[0]));
   //all.initialGimic.push(new multiMuzzleRevolver(3, DIFF, [vecs[1], vecs[2], vecs[3], vecs[4], vecs[5]]));
   // convert忘れてた
-  all.connectMulti([1, 2], [[2], [3]]);
+  all.connectMulti([1, 2, 3], [[2], [3], [0]]);
   // なんだろ、このconvertまでの一連の流れをもうちょっとメソッド化したいな・・・・
   all.registActor([0, 0, 0, 0, 0], [2, 2, 2, 2, 2], [0, 1, 2, 3, 4]);
   all.activateAll();
@@ -1302,6 +1197,61 @@ function createPattern8(){
   all.activateAll();
   // すばらしい。かんぺき。rotaryは順繰りに行先を変えてくれるので同じハブからいろんなflowにつなげる。
   // assembleRotaryは集まるごとに行先が変わるのでMassGameなどに使える。
+}
+// まあ、bulletってクラス作ってfromとtoとdiffVector持たせればいいんだけどね・・
+function createPattern9(){
+  // rect, ellipseのテスト
+  // とりあえず横移動。
+  let vecs = getVector([100, 200], [100, 100]);
+  let paramSet = getOrbitalFlow(vecs, [0], [1], 'straight');
+  all.registFlow(paramSet);
+  // fanはこっちに書く（DIFFなので）
+  vecs = getVector([300, -100], [100, 300]);
+  paramSet = getOrientedMuzzle(vecs, [1], [0], [0.1], [60], [DIFF], [[0, 1]], [3]);
+  all.registFlow(paramSet);
+  // まずはrect.
+  vecs = getVector([100, 500], [100, 500]);
+  paramSet = getOrientedMuzzle(vecs, [1], [0], [0.1], [60], [DIRECT], [[0, 1]], [1]);
+  all.registFlow(paramSet);
+  // 次にellipse.
+  vecs = getVector([300, 200], [300, 200]);
+  paramSet = getOrientedMuzzle(vecs, [1], [0], [0.1], [60], [DIRECT], [[0, 1]], [2]);
+  all.registFlow(paramSet);
+  // 戻す用
+  let v = createVector(100, 100);
+  paramSet = getOrientedMuzzle([v], [1], [0], [0.1], [60], [DIRECT], [[0]], [0]);
+  all.registFlow(paramSet);
+  // もう一度おねがい
+  vecs = getVector([100, 200], [100, 100]);
+  paramSet = getOrbitalFlow(vecs, [0], [1], 'straight');
+  all.registFlow(paramSet);
+  // 戻した後でrotationいってみようか
+  vecs = [createVector(200, 0), createVector(1, 0.1), createVector(200, 0)];
+  paramSet = getOrientedMuzzle(vecs, [1], [0], [0.1], [60], [DIFF], [[0, 1, 2]], [4]);
+  all.registFlow(paramSet);
+  // 良い感じ
+  // じゃあ最後にパラレル
+  // 戻す用
+  v = createVector(100, 100);
+  paramSet = getOrientedMuzzle([v], [1], [0], [0.1], [60], [DIRECT], [[0]], [0]);
+  all.registFlow(paramSet);
+  // もう一度おねがい
+  vecs = getVector([100, 200], [100, 100]);
+  paramSet = getOrbitalFlow(vecs, [0], [1], 'straight');
+  all.registFlow(paramSet);
+  // parallel.
+  vecs = [createVector(200, 0), createVector(-10, 10), createVector(200, 0)];
+  paramSet = getOrientedMuzzle(vecs, [1], [0], [0.1], [60], [DIFF], [[0, 1, 2]], [5]);
+  all.registFlow(paramSet);
+  // 戻す用
+  v = createVector(100, 100);
+  paramSet = getOrientedMuzzle([v], [1], [0], [0.1], [60], [DIRECT], [[0]], [0]);
+  all.registFlow(paramSet);
+
+  all.connectMulti([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [[1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [0]]);
+
+  all.registActor(constSeq(0, 36), constSeq(2, 36), constSeq(0, 36));
+  all.activateAll();
 }
 
 // 速度を与えて毎フレームその分だけ移動するとか？その場合イージングはどうなる・・
@@ -1385,7 +1335,7 @@ function getOrbitalFlow(vecs, fromIds, toIds, typename, allOne = true){
 }
 
 function getOrbitalEasingFlow(vecs, idSet1, idSet2, ratioSet, spanSet, firstVectorIds, secondVectorIds){
-  // orbitalEasingFlow用
+  // orbitalEasingFlow用(spanに-1入れるのはやめた・・)
   let paramSet = [];
   for(let i = 0; i < idSet1.length; i++){
     let dict = {type:'orbitalEasing', easeId1:idSet1[i], easeId2:idSet2[i], ratio:ratioSet[i], spanTime:spanSet[i]};
@@ -1396,11 +1346,11 @@ function getOrbitalEasingFlow(vecs, idSet1, idSet2, ratioSet, spanSet, firstVect
   return paramSet;
 }
 
-function getMuzzle(vecs, idSet1, idSet2, ratioSet, spanSet, kinds, arrayOfInfoIdArray){
+function getOrientedMuzzle(vecs, idSet1, idSet2, ratioSet, spanSet, kinds, arrayOfInfoIdArray, modes){
   // orientedFlow用(muzzle用)
   let paramSet = [];
   for(let i = 0; i < idSet1.length; i++){
-    let dict = {type:'muzzle', easeId1:idSet1[i], easeId2:idSet2[i], ratio:ratioSet[i], spanTime:spanSet[i], kind:kinds[i]};
+    let dict = {type:'orientedMuzzle', easeId1:idSet1[i], easeId2:idSet2[i], ratio:ratioSet[i], spanTime:spanSet[i], kind:kinds[i], mode:modes[i]};
     // ベクトルの集合に置き換える
     let infoVectorArray = [];
     arrayOfInfoIdArray[i].forEach(function(id){ infoVectorArray.push(vecs[id]); })
