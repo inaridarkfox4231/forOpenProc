@@ -801,41 +801,6 @@ class activateGimic extends Gimic{
 // たとえばボードゲームとかで状態異常発生させるとかワープさせる、そういうことに使うんです、これは。
 // 汎用コードだとあんま使い道ないかもね・・
 
-/*
-// Revolve無理でした（そりゃそうだー）
-// orientedFlowのinitialGimicに登録して使う
-class singleMuzzleRevolver extends Gimic{
-  // 銃口ひとつ
-  // よく考えたら銃口部分がとんでく先を指定するの当然やな・・flowは頭脳みたいな役割分担
-  constructor(myFlowId, kind, infoVector){
-    super(myFlowId);
-    this.kind = kind;
-    this.infoVector = infoVector;
-  }
-  action(_actor){
-    console.log(this);
-    let f = all.getFlow(this.myFlowId)
-    f.regist(_actor, this.kind, this.infoVector);
-  }
-}
-
-class multiMuzzleRevolver extends Gimic{
-  // 銃口ひとつ
-  // よく考えたら銃口部分がとんでく先を指定するの当然やな・・flowは頭脳みたいな役割分担
-  constructor(myFlowId, kind, infoVectorArray){
-    super(myFlowId);
-    this.kind = kind;
-    this.infoVectorArray = infoVectorArray;
-    this.currentIndex = 0;
-  }
-  action(_actor){
-    //console.log(this);
-    let f = all.getFlow(this.myFlowId)
-    f.regist(_actor, this.kind, this.infoVectorArray[this.currentIndex]);
-    this.currentIndex = (this.currentIndex + 1) % this.infoVectorArray.length;
-  }
-}*/
-
 // コードの再利用ができるならこれを複数バージョンに・・って事も出来るんだけどね
 
 // Colosseoっていう、いわゆる紅白戦みたいなやつ作りたいんだけど。なんか、互いに殺しあってどっちが勝つとか。
@@ -929,8 +894,6 @@ class entity{
   connect(index, nextIndexList){
     // index番のflowの行先リストをnextIndexListによって作る
     nextIndexList.forEach(function(nextIndex){
-      //console.log(index);
-      //console.log(this.getFlow(index));
       this.getFlow(index).convertList.push(this.getFlow(nextIndex));
     }, this)
   }
@@ -938,8 +901,6 @@ class entity{
     // IndexListに書かれたindexのflowにまとめて指定する
     // たとえば[6, 7, 8], [[2], [3], [4, 5]] ってやると6に2, 7に3, 8に4, 5が指定される
     for(let i = 0; i < indexList.length; i++){
-      //console.log(i);
-      //console.log(nextIndexListArray[i]);
       this.connect(indexList[i], nextIndexListArray[i]);
     }
   }
