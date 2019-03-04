@@ -3,18 +3,38 @@
 // 今現在どこまで複雑な事をやってるのか知りたい
 // ビジュアルだけ
 let all;
+let clickFlag;
 let hueSet;
 
 const IDLE = 0; // initialize前の状態
 const IN_PROGRESS = 1; // flow実行中の状態
 const COMPLETED = 2; // flowが完了した状態
 
+// ここで何かしらのflowを用意する必要があるみたいです
+// というかflowのセットですね。つまり外部的なactorとしてentityが唯一存在していて、
+// flowが一通り、用意されて、それは外部のメソッドとして作るんですが、
+// そしてその間のキー操作によるconvert条件が一通り、例えば今までのように、次々とクリックにより次のイメージを
+// 出現させるなど。あれはswitchPatternとしてentityのメソッドとして表現していたんですが、
+// これをflowのconvertとして表現するわけですね。そして新しくパターンを追加する際には、
+// それに対応したflowを作るわけですね。パターン0, パターン1, パターン2, etc...
+// これなら新しいパターンを追加しやすいし、つなぐのも簡単（0→1→2→0を0→1→2→3→0にするなど）。
+// それに以前と違っていきなり全部ロードされることも無いし。
+// 何より、setupでentityにセットされるパターンを差し替えることで、
+// 新しいパターンを簡単に試すことができる。ね。つなぎ方を変えれば・・
+// まあでも一応flowはすべて・・あ、そうか、作る必要は必ずしもないのか。たとえば、0, 1, 2, 3として・・
+// 多分順番に let pattern0 = ..., let pattern1 = ... んー、これ全部クラス？か。成程・・うん。
+// let p0 = new pattern0(); let p1 = new pattern1(); let p2 = pattern2(); ...
+// p0 → p1 → p2 → p0 (connection)
+// all = new entity(p0); こういうこと？で、all.activate(); そしてすべてが、動き出す（なんの映画だ）
+
 function setup(){
   createCanvas(640, 480);
   colorMode(HSB, 100); // hueだけでいろいろ指定出来て便利なので。
   hueSet = [0, 10, 17, 35, 52, 64, 80];
-  all = new entity();
-  all.initialize();
+  let initialFlow = initialize(); // 初期化でもろもろ準備して最後に最初のFlowを返す
+  all = new entity(initialFlow); // それをセットしてentityを準備
+  clickFlag = false; // クリックされるとtrueになり、情報を処理した後でfalseに戻る
+  all.activate(); // activate. これですべてが動き出すといいのだけどね。
 }
 
 function draw(){
@@ -22,45 +42,13 @@ function draw(){
   all.display();
 }
 
-// MassGameうまくいきすぎて結局本質が分かりにくくなってしまった感ある
-// もうちょっとシンプルな例でやるか
-
-class entity{
-  constructor(){
-
-  }
-  update(){};
-  display(){};
+// 押されたときは何も起こらない。押して離されたときに起きる。
+function mouseClicked(){
+  clickFlag = true;
 }
 
-// つまり、entityの・・
-// base: これはflowがいろいろ書き込まれてる。矢印とか。これを事前に作って毎フレーム背景クリアのたびに・・
-
-// initializeで二つの事をやってる。
-// 1. createPattern.
-// ひとつはパターン生成。必要なactorとflowを作りさらにその間の接続を行う。これもいろんなことごちゃごちゃと
-// まとめてやっちゃってて分かりにくいから権限移譲しないとな・・って思って今書いてる感じ。
-// 2. drawBase.
-// もうひとつはbaseと今呼ばれている矢印とか色々書かれた奴を作る処理。まっさらなキャンバスに矢印を書き込んでますね。
-// 矢印、自分なりの表現を見つけたい・・あれあんま好きじゃない。
-// それはさておき、そうか、ここで作ってるのか・・それを毎フレーム、背景クリア、base描画、それとは別に
-// canvasに直接オブジェクト描画、であのアニメーションを作っているとそういうわけだ。
-
-// これをね。
-
-// 役割分担すると。つまりオブジェクトって毎フレーム動くでしょ、だからそれ専用のグラフィックを別に作って、
-// そっちを毎フレームクリアしてオブジェクト貼り付け、で、それを毎フレーム背景描画のあとで貼り付け、みたいな。イメージ。
-// もしさらに何かしら、たとえば動く何か、みたいのあるんだったら・・ないか。基本、静的と動的、かな。
-// そう。静的オブジェクトのレイヤーと動的オブジェクトのレイヤーを分けようってこと。
-// もっとも背景の色が変わる場合は静的であっても変化はあるんだけどそこはそれ。
-// だからどっちかというと静的動的よりかは描画順の方が大事なのかな、でもまあいいよ。
-// だって背景後で描画したら全部消えちゃうでしょ。
-
-// この場合、flow(といっても矢印系とか)のdisplayとactor(特に動く点とか)のdisplayに特別な違いはなさそう。
-// ああそうか、背景は基本いじらないもんね。つまり毎フレーム基本同じものを使い続けるのがbackgroundで、
-// 毎フレームクリアして違う位置に描画するのを繰り返すのがobjectの方って感じかな。
-// さらにそれらもあらかじめ（今使ってるやつみたいに）グラフィックで描画内容を作っておいてそれを貼り付ける感じで。
-// それについても（形の変化とか）必要に応じてクリアの後更新するって感じなのね。
+// MassGameうまくいきすぎて結局本質が分かりにくくなってしまった感ある
+// もうちょっとシンプルな例でやるか
 
 // 簡単なカウンター
 class counter{
@@ -110,14 +98,16 @@ class flow{
 // それによりスクロールを実現する？pygameでそうしたように。
 
 // 以下が特別な部分
-class spiralFlow(){
-  constructor(){}
+class spiralFlow extends flow{
+  constructor(){
+    super();
+  }
   execute(){}
 }
 
 // actorはflowをこなすだけの存在
 class actor{
-  constructor(f = undefined){
+  constructor(f){
     this.index = actor.index++; // 通し番号
     this.currentFlow = f; // 実行中のフロー
     this.timer = new counter(); // カウンター
@@ -145,8 +135,8 @@ class actor{
 }
 
 // 以下がビジュアルの部分
-class movingActor{
-  constructor(){}
+class movingActor extends actor{
+  constructor(f){ super(f); }
 }
 
 class figure{
@@ -154,24 +144,29 @@ class figure{
 }
 
 // 描画の層を管理、とりあえず背景とオブジェクトの2枚。これを切り取ってcanvasに描画して使う（はず）（？）
-class layor extends actor{
-  constructor(){
-    this.backgroundSheet = createGraphics(640, 480); // 必要に応じてサイズ変更とかありそうですね
-    this.objectSheet = createGraphics(640, 480); // オブジェクトのシートは毎フレームクリアされてオブジェクトが
+class layerMaster extends actor{
+  constructor(f){
+    super(f);
+    this.bgLayer = createGraphics(640, 480); // 必要に応じてサイズ変更とかありそうですね
+    this.objLayer = createGraphics(640, 480); // オブジェクトのシートは毎フレームクリアされてオブジェクトが
     // 描画される、毎フレームやることはまずbackground敷いてその上にオブジェクト。うん。たぶんね。
+    // 今は面倒だからbgLayerは単色でいいや・・あ、単色に黒でstraightFlowとか描くかもだけど。
+    // そこらへんはflowMasterがどれをどっちに描くとか、actorMasterが決める、actorは基本objLayerにしか描かないよと。
   }
 }
 
 // actorを管理する。場面ごとに必要なactorを用意してflowにしたがって適宜指示を出す感じかも。
 class actorMaster extends actor{
-  constructor(){
+  constructor(f){
+    super(f);
     this.actors = [];
   }
 }
 
 // flowを管理する。場面ごとに必要なflowを用意してflowに従って接続ないしは管理を行うのかどうかわからない誰か教えて（
 class flowMaster extends actor{
-  constructor(){
+  constructor(f){
+    super(f);
     this.flows = [];
   }
 }
@@ -182,6 +177,104 @@ class flowMaster extends actor{
 
 actor.index = 0;
 flow.index = 0;
+
+// 今までのentityは監督が全部何から何までやってる感じだったけどそれを変えようかなと。
+
+// method確認中・・
+// getFlow, getActor要らないよな・・何であるんだこれは・・
+// resetは場面の転換で表現したいところ。
+// activateAll() をやるのはコマンダーだろうなぁ普通に考えて。updateもdisplayもコマンダーがやる、のがいい？
+// registActor, registFlowってあるけどこれも設計図に従ってcommanderとtransporterがやればいいのか？
+// actorに最初のflowを与えるための指示とかどうするんだろ
+// connectはこれもtransporterが必要なflowすべて持ってるから設計図に従って接続するんですかね・・
+// createFlowの汎用関数はもうちょっと使いやすくしたいですねー
+// あ、終わりですね。
+
+// entityもactor扱いするとすべてがすっきりするそうです（まじか）
+
+class entity extends actor{
+  constructor(f){
+    super(f);
+    this.commander = new actorMaster(); // 指揮する人
+    this.converter = new flowMaster(); // 流す人
+    this.carpenter = new layerMaster(); // 舞台を作る人
+  }
+  initialize(){
+    // 初めにやることってなんだ・・・・・
+  }
+  update(){
+    this.commander.update();
+    this.converter.update(); // こうじゃないの？
+  };
+  display(){
+    this.carpenter.display(); // で、こう。
+  };
+}
+
+// つまり、entityの・・
+// base: これはflowがいろいろ書き込まれてる。矢印とか。これを事前に作って毎フレーム背景クリアのたびに・・
+
+// initializeで二つの事をやってる。
+// 1. createPattern.
+// ひとつはパターン生成。必要なactorとflowを作りさらにその間の接続を行う。これもいろんなことごちゃごちゃと
+// まとめてやっちゃってて分かりにくいから権限移譲しないとな・・って思って今書いてる感じ。
+// 2. drawBase.
+// もうひとつはbaseと今呼ばれている矢印とか色々書かれた奴を作る処理。まっさらなキャンバスに矢印を書き込んでますね。
+// 矢印、自分なりの表現を見つけたい・・あれあんま好きじゃない。
+// それはさておき、そうか、ここで作ってるのか・・それを毎フレーム、背景クリア、base描画、それとは別に
+// canvasに直接オブジェクト描画、であのアニメーションを作っているとそういうわけだ。
+
+// これをね。
+
+// 役割分担すると。つまりオブジェクトって毎フレーム動くでしょ、だからそれ専用のグラフィックを別に作って、
+// そっちを毎フレームクリアしてオブジェクト貼り付け、で、それを毎フレーム背景描画のあとで貼り付け、みたいな。イメージ。
+// もしさらに何かしら、たとえば動く何か、みたいのあるんだったら・・ないか。基本、静的と動的、かな。
+// そう。静的オブジェクトのレイヤーと動的オブジェクトのレイヤーを分けようってこと。
+// もっとも背景の色が変わる場合は静的であっても変化はあるんだけどそこはそれ。
+// だからどっちかというと静的動的よりかは描画順の方が大事なのかな、でもまあいいよ。
+// だって背景後で描画したら全部消えちゃうでしょ。
+
+// この場合、flow(といっても矢印系とか)のdisplayとactor(特に動く点とか)のdisplayに特別な違いはなさそう。
+// ああそうか、背景は基本いじらないもんね。つまり毎フレーム基本同じものを使い続けるのがbackgroundで、
+// 毎フレームクリアして違う位置に描画するのを繰り返すのがobjectの方って感じかな。
+// さらにそれらもあらかじめ（今使ってるやつみたいに）グラフィックで描画内容を作っておいてそれを貼り付ける感じで。
+// それについても（形の変化とか）必要に応じてクリアの後更新するって感じなのね。
+
+// -------------------------------------------------------------------------------------------------- //
+function initialize(){
+  let p0 = new pattern0();
+  let p1 = new pattern1();
+  p0.convertList.push(p1); // p0 → p1.
+  p1.convertList.push(p0); // p1 → p0.
+  return p0;
+}
+
+// もしくは、p1, p2, p3. ... , pnとあって、p0からクリック位置によって各々のパターンに跳べるようにするとか。
+// で、またp0に戻ってきて、みたいな。そういうのも、いいね。
+
+class pattern0 extends flow{
+  constructor(){
+    super();
+  }
+  initialize(_actor){}
+  execute(_actor){
+    // クリックされたらCOMPLETEDにしてね
+    if(clickFlag){ _actor.setState(COMPLETED); clickFlag = false; }
+  }
+  convert(_actor){} // 次のパターンにしてね
+}
+
+class pattern1 extends flow(){
+  constructor(){
+    super();
+  }
+  initialize(_actor){}
+  execute(_actor){
+    // クリックされたらCOMPLETEDにしてね
+    if(clickFlag){ _actor.setState(COMPLETED); clickFlag = false; }
+  }
+  convert(_actor){} // 次のパターンにしてね
+}
 
 // -------------------------------------------------------------------------------------------------- //
 // utility.
@@ -286,3 +379,5 @@ function getVector(posX, posY){
   }
   return vecs;
 }
+
+// -------------------------------------------------------------------------------------------------- //
