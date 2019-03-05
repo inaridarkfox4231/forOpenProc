@@ -6,6 +6,7 @@ let x, y, z, w;
 
 function setup(){
   createCanvas(200, 200);
+  colorMode(HSB, 100);
   myColor = color(0, 0, 0, 0);
   x = 0;
   y = 0;

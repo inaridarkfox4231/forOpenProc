@@ -1,16 +1,5 @@
 'use strict';
-// spiralFlowだけの世界を作ってみて。テスト。
-// 今現在どこまで複雑な事をやってるのか知りたい
-// ビジュアルだけ
-
-// フローを動かすにはどうするか？どうするか具体的に決めればいい。終わり。・・
-// もっと具体的に言うと、たとえば行先が3つくらいあったとしてそれらが一定周期で移り変わる場合、
-// そのフローをアクターに装備させてアクターの動きに応じて変化させればいいし
-// ビジュアルについても毎フレームobjLayerに描画させるようにentityに装備させるflowに書いておけばいいわけ。
-// そのflowにはどのflowを事前にbase, つまりbgLayerに描いておくかも書いておく。
-// アニメとかで背景の岩と仕掛け岩を区別して描くイメージ。仕掛け岩は動くからobjLayerに描く。
-
-// ていうか、actorの描画メソッドに登録flowの描画メソッドを呼び出すように書くだけでしょ。
+// 従来のパターンシークエンスのスクリプト
 
 let all;
 let clickFlag;
@@ -20,38 +9,11 @@ const IDLE = 0; // initialize前の状態
 const IN_PROGRESS = 1; // flow実行中の状態
 const COMPLETED = 2; // flowが完了した状態
 
-// ここで何かしらのflowを用意する必要があるみたいです
-// というかflowのセットですね。つまり外部的なactorとしてentityが唯一存在していて、
-// flowが一通り、用意されて、それは外部のメソッドとして作るんですが、
-// そしてその間のキー操作によるconvert条件が一通り、例えば今までのように、次々とクリックにより次のイメージを
-// 出現させるなど。あれはswitchPatternとしてentityのメソッドとして表現していたんですが、
-// これをflowのconvertとして表現するわけですね。そして新しくパターンを追加する際には、
-// それに対応したflowを作るわけですね。パターン0, パターン1, パターン2, etc...
-// これなら新しいパターンを追加しやすいし、つなぐのも簡単（0→1→2→0を0→1→2→3→0にするなど）。
-// それに以前と違っていきなり全部ロードされることも無いし。
-// 何より、setupでentityにセットされるパターンを差し替えることで、
-// 新しいパターンを簡単に試すことができる。ね。つなぎ方を変えれば・・
-// まあでも一応flowはすべて・・あ、そうか、作る必要は必ずしもないのか。たとえば、0, 1, 2, 3として・・
-// 多分順番に let pattern0 = ..., let pattern1 = ... んー、これ全部クラス？か。成程・・うん。
-// let p0 = new pattern0(); let p1 = new pattern1(); let p2 = pattern2(); ...
-// p0 → p1 → p2 → p0 (connection)
-// all = new entity(p0); こういうこと？で、all.activate(); そしてすべてが、動き出す（なんの映画だ）
-
 function setup(){
   createCanvas(640, 480);
   colorMode(HSB, 100); // hueだけでいろいろ指定出来て便利なので。
   hueSet = [0, 10, 17, 35, 52, 64, 80];
   let initialFlow = initialize(); // 初期化でもろもろ準備して最後に最初のFlowを返す
-
-  // 違う。
-  // 本当にinitializeでやることは各種パターンのイニシャライズフローの生成とその間の連携(connect)。
-  // 具体的にはどこからどこへ行けるかの指示。タイトルからセレクト、セレクトからプレイ、etc.
-  // それをグローバルの関数でやりつつ、
-  // 起点となるイニシャライズフローをentityにセットして
-  // entityをactivateすることですべてが動き出すっていうシナリオですかね。
-  // そんな感じだと思う。
-  // あ、そうなってるのね・・失礼
-
   all = new entity(initialFlow); // それをセットしてentityを準備
   clickFlag = false; // クリックされるとtrueになり、情報を処理した後でfalseに戻る
   all.activate(); // activate. これですべてが動き出すといいのだけどね。
@@ -66,9 +28,6 @@ function draw(){
 function mouseClicked(){
   clickFlag = true;
 }
-
-// MassGameうまくいきすぎて結局本質が分かりにくくなってしまった感ある
-// もうちょっとシンプルな例でやるか
 
 // 簡単なカウンター
 class counter{
@@ -94,31 +53,20 @@ class counter{
 class flow{
   constructor(){
     this.index = flow.index++;
-    this.convertList = []; // 今回分かったように具体的なシーンにおいてはconvertConditionが明確に与えられます
-    // 辞書で管理するべきかもだけど
-    // indexはおそらくデフォルトでは不要・・行先をころころ変えるハブのようなものに付加的に付与されるものかと。
-    // 他に、こないだのMassGameのような場合でも0番1番と具体的に指示されるならoverrideで済むので。
+    this.convertList = [];
   }
   addFlow(_flow){ this.convertList.push(_flow); }
   initialize(_actor){} // flowの内容に応じて様々な初期化を行います
   execute(_actor){} // デフォルトは何もしない。つまりCOMPLETEDにすらしない。
   convert(_actor){
-    // デフォルトはいわゆるランダムスローですね。どれかを適当に返す。
-    // もちろんソリッドな状況では具体的に指示され・・それはoverrideで何とでも。
     let n = this.convertList.length;
     if(n === 0){ _actor.setFlow(undefined); _actor.inActivate(); } // non-Activeにすることでエラーを防ぎます。
     else{ _actor.setFlow(this.convertList[randomInt(n)]); }
-    // _actorがundefined装備かつactiveだとエラーが発生する仕様はデバッグの為にあえてそうしています。
   }
   display(gr){} // 今気付いたけど本来actorもどこかしらの背景grに貼り付けて使うんじゃ・・
 }
 
-// つまり場面ごとに背景があってそこに貼り付けると。で、描画する際はそこから画面のサイズだけ切り取る、と。
-// それによりスクロールを実現する？pygameでそうしたように。
-
 // fromからtoへspanフレーム数で移動するflow.
-// MassGameのやつはプログラム用にバリバリカスタマイズしてるけどこれはごくごく普通のconstantFlowになります。
-// というか特殊化とは要するにそういうことです。これは汎用コードなので特殊化する必要がないだけで。
 class constantFlow extends flow{
   constructor(from, to, span){
     super();
@@ -128,12 +76,10 @@ class constantFlow extends flow{
   }
   initialize(_actor){
     _actor.timer.reset(this.span);
-    //console.log('constant %d', this.index);
   }
   execute(_actor){
     _actor.timer.step();
     let prg = _actor.timer.getProgress();
-    //console.log("%d %d", _actor.pos.x, _actor.pos.y)
     _actor.pos.x = map(prg, 0, 1, this.from.x, this.to.x);
     _actor.pos.y = map(prg, 0, 1, this.from.y, this.to.y);
     if(prg === 1){ _actor.setState(COMPLETED); }
@@ -151,6 +97,8 @@ class constantFlow extends flow{
     gr.pop();
   }
 }
+
+// 以前のように、多彩なフロー、もしくはハブを追加していくことができる。
 
 // actorはflowをこなすだけの存在
 class actor{
@@ -227,29 +175,10 @@ class figure{
     gr.pop();
   }
 }
-// entityがactorで他のactorはすべてこれが統括
-
-// 今まではactorsとflowsはentityが管理してたけどよく考えたらプログラムの実行中にやってることがほぼないなと。
-// だったらactorとflowの管理は↑こういうのに任せてentityはこいつらをupdateないしdisplayするだけでいいかなとか。
-// あ、displayはlayorの仕事・・ですね。
 
 actor.index = 0;
 flow.index = 0;
 
-// method確認中・・
-// getFlow, getActor要らないよな・・何であるんだこれは・・
-// resetは場面の転換で表現したいところ。
-// activateAll() をやるのはコマンダーだろうなぁ普通に考えて。updateもdisplayもコマンダーがやる、のがいい？
-// registActor, registFlowってあるけどこれも設計図に従ってcommanderとtransporterがやればいいのか？
-// actorに最初のflowを与えるための指示とかどうするんだろ
-// connectはこれもtransporterが必要なflowすべて持ってるから設計図に従って接続するんですかね・・
-// createFlowの汎用関数はもうちょっと使いやすくしたいですねー
-// あ、終わりですね。
-
-// entityもactor扱いするとすべてがすっきりするそうです（まじか）
-
-// actorである以上updateはあれだし、ということはidleActionとかin_progressActionとかcompletedActionがあるわけで。
-// たぶんcompletedActionで画面の移行をやるんだろうなと。リセットとかその辺。
 class entity extends actor{
   constructor(f = undefined){
     super(f);
@@ -258,13 +187,6 @@ class entity extends actor{
     this.objLayer = createGraphics(640, 480);
     this.bgLayer.colorMode(HSB, 100);  // デフォルトはRGBモードなので注意する。
     this.objLayer.colorMode(HSB, 100);
-    // 今まで複数のレイヤーを駆使するとかなかったからつい・・・・
-
-    // たとえば特別なactorを用意してそれを元にoffsetを計算し
-    // displayメソッドをいじることでスクロールを可能にするとかそういうのもできそう
-    // 画面内のactorだけ描画するとか他の工夫も要りそうだけど
-    // さらにactor以外のクラスも必要になる場合もありそう
-    // 宝箱とか？？階段ってハブだっけ。
   }
   in_progressAction(){
     this.actors.forEach(function(a){ a.update(); }) // 構成メンバーのupdate
@@ -277,28 +199,11 @@ class entity extends actor{
     this.bgLayer.clear();
     this.objLayer.clear();
   }
-  // よく考えたらdisplay関係もexecuteに書いた方がいいのかな・・だってどう描画するかが常に同じって事はないでしょうに。
-  // それか・・んー。個別に指定したいけどね。
-  // それともobjLayerへの貼り付けだけexecuteに書くとか。
-
   display(){
-    //this.actors.forEach(function(a){ a.display(this.objLayer); }) // objLayerにactorの画像を貼り付ける→execute?
     image(this.bgLayer, 0, 0); // bgLayerの内容は各々のパターン（タイトルやセレクト）のexecuteに書いてある
-    // movingVariousFigureでこれを使ってるはず（パターンに応じて背景色変えてるでしょ、あれ。）
     image(this.objLayer, 0, 0);
   }
 }
-
-// 考えたんだけどポーズとかも？かなぁ。ポーズは途中退場みたいな感じで、いろいろなactorを一旦non-Activeにする。
-// で、画面に透明度のあるカバーをかぶせるとか・・それ床屋にいる間に考えたんだけど（（
-// bgLayer → objLayer → coverLayerって感じで、基本coverLayerは何も書かなくって、
-// pause..のときもあれ、背景とかは普通に出てるし。その場合はクリアしないでそのまま、みたいな。
-// つまりpause命令が出ると更新されないレイヤーがそのまま貼り付けられてポーズが、ってのを延々と繰り返す感じ。
-// 更新はいつやるのか？
-// 更新はexecuteでやるからそれをパスする感じなんかな。。つまりそのstateのFlowに「pauseのときはexecuteしないでね」
-// って書いてあるのかも。だってタイトル画面にポーズはないでしょ・・だから、ね。
-
-// entityのところには基本的にすべてのステートで共通の処理しか書けないはず。個別の処理をフローに書く。
 
 // -------------------------------------------------------------------------------------------------- //
 function initialize(){
@@ -309,26 +214,6 @@ function initialize(){
   return p0; // そうそう。これをentityにセットする。
 }
 
-// もしくは、p1, p2, p3. ... , pnとあって、p0からクリック位置によって各々のパターンに跳べるようにするとか。
-// で、またp0に戻ってきて、みたいな。そういうのも、いいね。
-
-// MassGameではこのpattern0に相当するところがpreparationでそれが終わったところで
-// delayなりallなりのシークエンスへと移行していったわけなんですが、
-// MovingVariousFigure的なあれはそれと全く違ってですね、
-// クリックするたびに違うパターンが現れる「だけ」ですから、何もすることが無いんですね。
-// ただ勝手にfigureがあっちいったりこっちいったりしているだけ。
-// だからそれを反映したものになっている、つまりこの時点でもう既に具体的なんですよね。だからどうってことも
-// ないですけど・・ずっとそういうの作ってきたわけですしおすし。
-
-// 初めに一回だけやるのがinitialize
-// そのflowの間やり続けるのがexecute
-// flowのチェンジ時にやることは・・どうするかな・・これ分けた方がいいんじゃ・・
-// リセットするかどうかもここに書く
-// パターンをクラスにするのはあのプログラムでもそうなるでしょうね。
-// パターン作成部分を「あれ」と同じようにstaticで書いて同じclassをとっかえひっかえする感じ、
-// つまりクラス生成時の引数から対応したstaticのパターンを呼び出してはめることで使うみたいな？
-// あっちの・・クリックでどのページにでも跳べるやつ、あれはハブ使った方がいい、でないとすべてのパターンに
-// すべてのパターンへの接続を書く羽目になる。馬鹿みたい。ハブ挟んだ方が賢い。
 class pattern extends flow{
   constructor(patternIndex){
     super();

@@ -1,15 +1,19 @@
 'use strict';
-let c;
 
 function setup(){
-  createCanvas(200, 200);
-  c = color(255, 0, 0);
+  createCanvas(400, 400);
+  noLoop();
 }
 
 function draw(){
-  background(c);
-  if(keyIsDown(65)){ c = color(0, 0, 255); }
-  else{ c = color(255, 0, 0); }
+  background(220);
+  strokeWeight(1.0);
+  stroke(0);
+  line(100, 100, 200, 200);
+  translate(200, 200);
+  let v = createVector(200 - 100, 200 - 100);
+  rotate(v.heading());
+  line(0, 0, -15, 7);
 }
 
 
