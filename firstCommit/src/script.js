@@ -2,6 +2,14 @@
 // spiralFlowだけの世界を作ってみて。テスト。
 // 今現在どこまで複雑な事をやってるのか知りたい
 // ビジュアルだけ
+
+// フローを動かすにはどうするか？どうするか具体的に決めればいい。終わり。・・
+// もっと具体的に言うと、たとえば行先が3つくらいあったとしてそれらが一定周期で移り変わる場合、
+// そのフローをアクターに装備させてアクターの動きに応じて変化させればいいし
+// ビジュアルについても毎フレームobjLayerに描画させるようにentityに装備させるflowに書いておけばいいわけ。
+// そのflowにはどのflowを事前にbase, つまりbgLayerに描いておくかも書いておく。
+// アニメとかで背景の岩と仕掛け岩を区別して描くイメージ。仕掛け岩は動くからobjLayerに描く。
+
 let all;
 let clickFlag;
 let hueSet;
@@ -68,7 +76,7 @@ class counter{
   }
   getCnt(){ return this.cnt; }
   getProgress(){ // 進捗
-    if(limit < 0){ return this.cnt; }
+    if(this.limit < 0){ return this.cnt; }
     if(this.cnt >= this.limit){ return 1; }
     return this.cnt / this.limit;
   }
@@ -89,6 +97,7 @@ class flow{
     // indexはおそらくデフォルトでは不要・・行先をころころ変えるハブのようなものに付加的に付与されるものかと。
     // 他に、こないだのMassGameのような場合でも0番1番と具体的に指示されるならoverrideで済むので。
   }
+  addFlow(_flow){ this.convertList.push(_flow); }
   initialize(_actor){} // flowの内容に応じて様々な初期化を行います
   execute(_actor){} // デフォルトは何もしない。つまりCOMPLETEDにすらしない。
   convert(_actor){
@@ -96,7 +105,7 @@ class flow{
     // もちろんソリッドな状況では具体的に指示され・・それはoverrideで何とでも。
     let n = this.convertList.length;
     if(n === 0){ _actor.setFlow(undefined); _actor.inActivate(); } // non-Activeにすることでエラーを防ぎます。
-    else{ _actor.setFlow(randomInt(n)); }
+    else{ _actor.setFlow(this.convertList[randomInt(n)]); }
     // _actorがundefined装備かつactiveだとエラーが発生する仕様はデバッグの為にあえてそうしています。
   }
   display(gr){} // 今気付いたけど本来actorもどこかしらの背景grに貼り付けて使うんじゃ・・
@@ -111,19 +120,28 @@ class flow{
 class constantFlow extends flow{
   constructor(from, to, span){
     super();
-    this.from = from;
-    this.to = to;
+    this.from = createVector(from.x, from.y);
+    this.to = createVector(to.x, to.y);
     this.span = span;
   }
   initialize(_actor){
     _actor.timer.reset(this.span);
+    //console.log('constant %d', this.index);
   }
   execute(_actor){
-    _actor.step();
+    _actor.timer.step();
     let prg = _actor.timer.getProgress();
+    //console.log("%d %d", _actor.pos.x, _actor.pos.y)
     _actor.pos.x = map(prg, 0, 1, this.from.x, this.to.x);
     _actor.pos.y = map(prg, 0, 1, this.from.y, this.to.y);
     if(prg === 1){ _actor.setState(COMPLETED); }
+  }
+  // grは基本的にbgLayerに描くけどactorに装備されてobjLayerに描くこともあるという。
+  display(gr){
+    gr.push();
+    gr.stroke(0);
+    gr.line(this.from.x, this.from.y, this.to.x, this.to.y);
+    gr.pop();
   }
 }
 
@@ -178,7 +196,7 @@ class movingActor extends actor{
 class figure{
   constructor(myColor){
     this.myColor = myColor;
-    this.graphic = createGraphic(40, 40);
+    this.graphic = createGraphics(40, 40);
     figure.setGraphic(this.graphic, myColor);
     this.rotation = 0; // 動きがないとね。
   }
@@ -192,13 +210,14 @@ class figure{
     img.fill(255);
     img.rect(16, 16, 2, 5);
     img.rect(24, 16, 2, 5);
-    // 汎用コードなのにサイズとか考えるべきではなかったのだ。以上。（え・・）
   }
   display(gr, pos){
+    gr.push();
     gr.translate(pos.x, pos.y);
     this.rotation += 0.1; // これも本来はfigureのupdateに書かないと・・基本的にupdate→drawの原則は破っちゃいけない
     gr.rotate(this.rotation);
     gr.image(this.graphic, -20, -20); // 20x20に合わせる
+    gr.pop();
   }
 }
 // entityがactorで他のactorはすべてこれが統括
@@ -209,8 +228,6 @@ class figure{
 
 actor.index = 0;
 flow.index = 0;
-
-// 今までのentityは監督が全部何から何までやってる感じだったけどそれを変えようかなと。
 
 // method確認中・・
 // getFlow, getActor要らないよな・・何であるんだこれは・・
@@ -229,9 +246,10 @@ flow.index = 0;
 class entity extends actor{
   constructor(f = undefined){
     super(f);
-    actors = [];
-    bgLayer = createGraphics(640, 480);
-    objLayer = createGraphics(640, 480);
+    this.actors = [];
+    this.bgLayer = createGraphics(640, 480);
+    this.objLayer = createGraphics(640, 480);
+    //console.log(this.bgLayer);
     // たとえば特別なactorを用意してそれを元にoffsetを計算し
     // displayメソッドをいじることでスクロールを可能にするとかそういうのもできそう
     // 画面内のactorだけ描画するとか他の工夫も要りそうだけど
@@ -240,19 +258,37 @@ class entity extends actor{
   }
   in_progressAction(){
     this.actors.forEach(function(a){ a.update(); }) // 構成メンバーのupdate
+    this.currentFlow.execute(this);
   }
   reset(){
+    actor.index = 0;  // カウントリセット
+    flow.index = 0;
     this.actors = [];
     this.bgLayer.clear();
     this.objLayer.clear();
   }
+  // よく考えたらdisplay関係もexecuteに書いた方がいいのかな・・だってどう描画するかが常に同じって事はないでしょうに。
+  // それか・・んー。個別に指定したいけどね。
+  // それともobjLayerへの貼り付けだけexecuteに書くとか。
+
   display(){
-    this.actors.forEach(function(a){ a.display(this.objLayer); }) // objLayerにactorの画像を貼り付ける
-    image(bgLayer, 0, 0); // bgLayerの内容は各々のパターン（タイトルやセレクト）のexecuteに書いてある
+    //this.actors.forEach(function(a){ a.display(this.objLayer); }) // objLayerにactorの画像を貼り付ける→execute?
+    image(this.bgLayer, 0, 0); // bgLayerの内容は各々のパターン（タイトルやセレクト）のexecuteに書いてある
     // movingVariousFigureでこれを使ってるはず（パターンに応じて背景色変えてるでしょ、あれ。）
-    image(objLayer, 0, 0);
+    image(this.objLayer, 0, 0);
   }
 }
+
+// 考えたんだけどポーズとかも？かなぁ。ポーズは途中退場みたいな感じで、いろいろなactorを一旦non-Activeにする。
+// で、画面に透明度のあるカバーをかぶせるとか・・それ床屋にいる間に考えたんだけど（（
+// bgLayer → objLayer → coverLayerって感じで、基本coverLayerは何も書かなくって、
+// pause..のときもあれ、背景とかは普通に出てるし。その場合はクリアしないでそのまま、みたいな。
+// つまりpause命令が出ると更新されないレイヤーがそのまま貼り付けられてポーズが、ってのを延々と繰り返す感じ。
+// 更新はいつやるのか？
+// 更新はexecuteでやるからそれをパスする感じなんかな。。つまりそのstateのFlowに「pauseのときはexecuteしないでね」
+// って書いてあるのかも。だってタイトル画面にポーズはないでしょ・・だから、ね。
+
+// entityのところには基本的にすべてのステートで共通の処理しか書けないはず。個別の処理をフローに書く。
 
 // -------------------------------------------------------------------------------------------------- //
 function initialize(){
@@ -274,55 +310,81 @@ function initialize(){
 // だからそれを反映したものになっている、つまりこの時点でもう既に具体的なんですよね。だからどうってことも
 // ないですけど・・ずっとそういうの作ってきたわけですしおすし。
 
+// 初めに一回だけやるのがinitialize
+// そのflowの間やり続けるのがexecute
+// flowのチェンジ時にやることは・・どうするかな・・これ分けた方がいいんじゃ・・
+// リセットするかどうかもここに書く
+// パターンをクラスにするのはあのプログラムでもそうなるでしょうね。
+// パターン作成部分を「あれ」と同じようにstaticで書いて同じclassをとっかえひっかえする感じ、
+// つまりクラス生成時の引数から対応したstaticのパターンを呼び出してはめることで使うみたいな？
+// あっちの・・クリックでどのページにでも跳べるやつ、あれはハブ使った方がいい、でないとすべてのパターンに
+// すべてのパターンへの接続を書く羽目になる。馬鹿みたい。ハブ挟んだ方が賢い。
 class pattern0 extends flow{
-  constructor(){
-    super();
+  constructor(){ // パターンが何かしらのあれで生成される場合は引数を受け取ったりもします。
+    super(); // あるいは別ステートからの情報を処理するなど（ステージ番号とかステージ内容とか）。
   }
-  initialize(_actor){
-    _actor.bgLayer.background(80, 40, 100);
+  initialize(_entity){
+    //console.log(_entity);
+    _entity.bgLayer.background(0, 100, 100);
     let vecs = getVector([100, 200, 200], [200, 200, 100]);
     let f0 = new constantFlow(vecs[0], vecs[1], 100);
     let f1 = new constantFlow(vecs[1], vecs[2], 100);
     let f2 = new constantFlow(vecs[2], vecs[0], 100);
+    f0.addFlow(f1); f1.addFlow(f2); f2.addFlow(f0); // また接続忘れそうになるやつー
+    f0.display(_entity.bgLayer);
+    f1.display(_entity.bgLayer);
+    f2.display(_entity.bgLayer);
     let a0 = new movingActor(f0, 0);
     let a1 = new movingActor(f1, 1);
     let a2 = new movingActor(f2, 2);
-    _actor.actors = [a0, a1, a2];
-    _actor.actors.forEach(function(a){ a.activate(); })
+    _entity.actors = [a0, a1, a2];
+    a0.setPos(100, 200); a1.setPos(200, 200); a2.setPos(200, 100);
+    _entity.actors.forEach(function(a){ a.activate(); }) // みんな起きてー！！
   }
-  execute(_actor){
+  execute(_entity){
+    // 毎フレーム、objLayerにactorを描いてね
+    _entity.objLayer.clear();
+    _entity.actors.forEach(function(a){ a.display(_entity.objLayer); })
     // クリックされたらCOMPLETEDにしてね
-    if(clickFlag){ _actor.setState(COMPLETED); clickFlag = false; }
+    if(clickFlag){ _entity.setState(COMPLETED); clickFlag = false; }
   }
-  convert(_actor){
-    _actor.currentFlow = this.convertList[0];
-    _actor.reset();
+  convert(_entity){
+    _entity.currentFlow = this.convertList[0];
+    _entity.reset(); // 移るときはリセットしてね！
   }
 }
 
-class pattern1 extends flow(){
+class pattern1 extends flow{
   constructor(){
     super();
   }
-  initialize(_actor){
-    _actor.bgLayer.background(50, 40, 100);
+  initialize(_entity){
+    _entity.bgLayer.background(50, 90, 100);
     let vecs = getVector([300, 400, 400], [400, 400, 300]);
     let f0 = new constantFlow(vecs[0], vecs[1], 100);
     let f1 = new constantFlow(vecs[1], vecs[2], 100);
     let f2 = new constantFlow(vecs[2], vecs[0], 100);
+    f0.addFlow(f1); f1.addFlow(f2); f2.addFlow(f0);
+    f0.display(_entity.bgLayer);
+    f1.display(_entity.bgLayer);
+    f2.display(_entity.bgLayer);
     let a0 = new movingActor(f0, 0);
     let a1 = new movingActor(f1, 1);
     let a2 = new movingActor(f2, 2);
-    _actor.actors = [a0, a1, a2];
-    _actor.actors.forEach(function(a){ a.activate(); })
+    _entity.actors = [a0, a1, a2];
+    a0.setPos(300, 400); a1.setPos(400, 400); a2.setPos(400, 300);
+    _entity.actors.forEach(function(a){ a.activate(); })
   }
-  execute(_actor){
+  execute(_entity){
+    // 毎フレーム、objLayerにactorを描いてね
+    _entity.objLayer.clear();
+    _entity.actors.forEach(function(a){ a.display(_entity.objLayer); })
     // クリックされたらCOMPLETEDにしてね
-    if(clickFlag){ _actor.setState(COMPLETED); clickFlag = false; }
+    if(clickFlag){ _entity.setState(COMPLETED); clickFlag = false; }
   }
-  convert(_actor){
-    _actor.currentFlow = this.convertList[0];
-    _actor.reset();
+  convert(_entity){
+    _entity.currentFlow = this.convertList[0];
+    _entity.reset();
   }
 }
 
