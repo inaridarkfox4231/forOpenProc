@@ -32,6 +32,16 @@ function setup(){
   colorMode(HSB, 100); // hueだけでいろいろ指定出来て便利なので。
   hueSet = [0, 10, 17, 35, 52, 64, 80];
   let initialFlow = initialize(); // 初期化でもろもろ準備して最後に最初のFlowを返す
+
+  // 違う。
+  // 本当にinitializeでやることは各種パターンのイニシャライズフローの生成とその間の連携(connect)。
+  // 具体的にはどこからどこへ行けるかの指示。タイトルからセレクト、セレクトからプレイ、etc.
+  // それをグローバルの関数でやりつつ、
+  // 起点となるイニシャライズフローをentityにセットして
+  // entityをactivateすることですべてが動き出すっていうシナリオですかね。
+  // そんな感じだと思う。
+  // あ、そうなってるのね・・失礼
+
   all = new entity(initialFlow); // それをセットしてentityを準備
   clickFlag = false; // クリックされるとtrueになり、情報を処理した後でfalseに戻る
   all.activate(); // activate. これですべてが動き出すといいのだけどね。
@@ -80,12 +90,10 @@ class flow{
     // 他に、こないだのMassGameのような場合でも0番1番と具体的に指示されるならoverrideで済むので。
   }
   initialize(_actor){} // flowの内容に応じて様々な初期化を行います
-  execute(_actor){ _actor.setState(COMPLETED); } // デフォルトは普通にCOMPLETEDさせる
-  // タイミングは本当に様々です。スタンダードなのはinitilaizeで_actorにtimerをセットさせてそれがきたら
-  // というものですけど他にも_actorが一定の値よりy座標が大きくなったらとか画面外に消えたらとか色々。
+  execute(_actor){} // デフォルトは何もしない。つまりCOMPLETEDにすらしない。
   convert(_actor){
-    // ランダムにオブジェクトがあっちいったりこっちいったりするいわゆるアクション系のアニメーションを描く場合、
-    // ほぼすべてのflowがオブジェクトを動かすために使われるので、ここはランダムスローになりますね。
+    // デフォルトはいわゆるランダムスローですね。どれかを適当に返す。
+    // もちろんソリッドな状況では具体的に指示され・・それはoverrideで何とでも。
     let n = this.convertList.length;
     if(n === 0){ _actor.setFlow(undefined); _actor.inActivate(); } // non-Activeにすることでエラーを防ぎます。
     else{ _actor.setFlow(randomInt(n)); }
@@ -97,17 +105,31 @@ class flow{
 // つまり場面ごとに背景があってそこに貼り付けると。で、描画する際はそこから画面のサイズだけ切り取る、と。
 // それによりスクロールを実現する？pygameでそうしたように。
 
-// 以下が特別な部分
-class spiralFlow extends flow{
-  constructor(){
+// fromからtoへspanフレーム数で移動するflow.
+// MassGameのやつはプログラム用にバリバリカスタマイズしてるけどこれはごくごく普通のconstantFlowになります。
+// というか特殊化とは要するにそういうことです。これは汎用コードなので特殊化する必要がないだけで。
+class constantFlow extends flow{
+  constructor(from, to, span){
     super();
+    this.from = from;
+    this.to = to;
+    this.span = span;
   }
-  execute(){}
+  initialize(_actor){
+    _actor.timer.reset(this.span);
+  }
+  execute(_actor){
+    _actor.step();
+    let prg = _actor.timer.getProgress();
+    _actor.pos.x = map(prg, 0, 1, this.from.x, this.to.x);
+    _actor.pos.y = map(prg, 0, 1, this.from.y, this.to.y);
+    if(prg === 1){ _actor.setState(COMPLETED); }
+  }
 }
 
 // actorはflowをこなすだけの存在
 class actor{
-  constructor(f){
+  constructor(f = undefined){
     this.index = actor.index++; // 通し番号
     this.currentFlow = f; // 実行中のフロー
     this.timer = new counter(); // カウンター
@@ -131,45 +153,55 @@ class actor{
   idleAction(){ this.currentFlow.initialize(this); this.setState(IN_PROGRESS); }
   in_progressAction(){ this.currentFlow.execute(this); } // いつCOMPLETEDするかはflowが決める（当然）
   completedAction(){ this.currentFlow.convert(this); this.setState(IDLE); } // convertで次のflowが与えられる
-  display(){}
+  display(gr){} // actorはそれ専用のsheetに貼り付けるのでgraphicを引数に取ります、多分。
 }
 
-// 以下がビジュアルの部分
+// 以下がビジュアルの部分. とりあえずシンプルにいきましょう。
 class movingActor extends actor{
-  constructor(f){ super(f); }
+  constructor(f = undefined, colorId){
+    super(f);
+    this.pos = createVector();
+    let myColor = color(hueSet[colorId], 100, 100);
+    this.visual = new figure(myColor);
+  }
+  setPos(x, y){
+    this.pos.set(x, y);
+  }
+  getPos(){
+    return this.pos;
+  }
+  display(gr){
+    this.visual.display(gr, this.pos); // 自分の位置に表示
+  }
 }
 
 class figure{
-  constructor(){}
-}
-
-// 描画の層を管理、とりあえず背景とオブジェクトの2枚。これを切り取ってcanvasに描画して使う（はず）（？）
-class layerMaster extends actor{
-  constructor(f){
-    super(f);
-    this.bgLayer = createGraphics(640, 480); // 必要に応じてサイズ変更とかありそうですね
-    this.objLayer = createGraphics(640, 480); // オブジェクトのシートは毎フレームクリアされてオブジェクトが
-    // 描画される、毎フレームやることはまずbackground敷いてその上にオブジェクト。うん。たぶんね。
-    // 今は面倒だからbgLayerは単色でいいや・・あ、単色に黒でstraightFlowとか描くかもだけど。
-    // そこらへんはflowMasterがどれをどっちに描くとか、actorMasterが決める、actorは基本objLayerにしか描かないよと。
+  constructor(myColor){
+    this.myColor = myColor;
+    this.graphic = createGraphic(40, 40);
+    figure.setGraphic(this.graphic, myColor);
+    this.rotation = 0; // 動きがないとね。
+  }
+  static setGraphic(img, myColor){
+    // 形のバリエーションは個別のプログラムでやってね
+    img.clear();
+    img.noStroke();
+    img.fill(myColor);
+    // 正方形
+    img.rect(10, 10, 20, 20);
+    img.fill(255);
+    img.rect(16, 16, 2, 5);
+    img.rect(24, 16, 2, 5);
+    // 汎用コードなのにサイズとか考えるべきではなかったのだ。以上。（え・・）
+  }
+  display(gr, pos){
+    gr.translate(pos.x, pos.y);
+    this.rotation += 0.1; // これも本来はfigureのupdateに書かないと・・基本的にupdate→drawの原則は破っちゃいけない
+    gr.rotate(this.rotation);
+    gr.image(this.graphic, -20, -20); // 20x20に合わせる
   }
 }
-
-// actorを管理する。場面ごとに必要なactorを用意してflowにしたがって適宜指示を出す感じかも。
-class actorMaster extends actor{
-  constructor(f){
-    super(f);
-    this.actors = [];
-  }
-}
-
-// flowを管理する。場面ごとに必要なflowを用意してflowに従って接続ないしは管理を行うのかどうかわからない誰か教えて（
-class flowMaster extends actor{
-  constructor(f){
-    super(f);
-    this.flows = [];
-  }
-}
+// entityがactorで他のactorはすべてこれが統括
 
 // 今まではactorsとflowsはentityが管理してたけどよく考えたらプログラムの実行中にやってることがほぼないなと。
 // だったらactorとflowの管理は↑こういうのに任せてentityはこいつらをupdateないしdisplayするだけでいいかなとか。
@@ -192,53 +224,35 @@ flow.index = 0;
 
 // entityもactor扱いするとすべてがすっきりするそうです（まじか）
 
+// actorである以上updateはあれだし、ということはidleActionとかin_progressActionとかcompletedActionがあるわけで。
+// たぶんcompletedActionで画面の移行をやるんだろうなと。リセットとかその辺。
 class entity extends actor{
-  constructor(f){
+  constructor(f = undefined){
     super(f);
-    this.commander = new actorMaster(); // 指揮する人
-    this.converter = new flowMaster(); // 流す人
-    this.carpenter = new layerMaster(); // 舞台を作る人
+    actors = [];
+    bgLayer = createGraphics(640, 480);
+    objLayer = createGraphics(640, 480);
+    // たとえば特別なactorを用意してそれを元にoffsetを計算し
+    // displayメソッドをいじることでスクロールを可能にするとかそういうのもできそう
+    // 画面内のactorだけ描画するとか他の工夫も要りそうだけど
+    // さらにactor以外のクラスも必要になる場合もありそう
+    // 宝箱とか？？階段ってハブだっけ。
   }
-  initialize(){
-    // 初めにやることってなんだ・・・・・
+  in_progressAction(){
+    this.actors.forEach(function(a){ a.update(); }) // 構成メンバーのupdate
   }
-  update(){
-    this.commander.update();
-    this.converter.update(); // こうじゃないの？
-  };
+  reset(){
+    this.actors = [];
+    this.bgLayer.clear();
+    this.objLayer.clear();
+  }
   display(){
-    this.carpenter.display(); // で、こう。
-  };
+    this.actors.forEach(function(a){ a.display(this.objLayer); }) // objLayerにactorの画像を貼り付ける
+    image(bgLayer, 0, 0); // bgLayerの内容は各々のパターン（タイトルやセレクト）のexecuteに書いてある
+    // movingVariousFigureでこれを使ってるはず（パターンに応じて背景色変えてるでしょ、あれ。）
+    image(objLayer, 0, 0);
+  }
 }
-
-// つまり、entityの・・
-// base: これはflowがいろいろ書き込まれてる。矢印とか。これを事前に作って毎フレーム背景クリアのたびに・・
-
-// initializeで二つの事をやってる。
-// 1. createPattern.
-// ひとつはパターン生成。必要なactorとflowを作りさらにその間の接続を行う。これもいろんなことごちゃごちゃと
-// まとめてやっちゃってて分かりにくいから権限移譲しないとな・・って思って今書いてる感じ。
-// 2. drawBase.
-// もうひとつはbaseと今呼ばれている矢印とか色々書かれた奴を作る処理。まっさらなキャンバスに矢印を書き込んでますね。
-// 矢印、自分なりの表現を見つけたい・・あれあんま好きじゃない。
-// それはさておき、そうか、ここで作ってるのか・・それを毎フレーム、背景クリア、base描画、それとは別に
-// canvasに直接オブジェクト描画、であのアニメーションを作っているとそういうわけだ。
-
-// これをね。
-
-// 役割分担すると。つまりオブジェクトって毎フレーム動くでしょ、だからそれ専用のグラフィックを別に作って、
-// そっちを毎フレームクリアしてオブジェクト貼り付け、で、それを毎フレーム背景描画のあとで貼り付け、みたいな。イメージ。
-// もしさらに何かしら、たとえば動く何か、みたいのあるんだったら・・ないか。基本、静的と動的、かな。
-// そう。静的オブジェクトのレイヤーと動的オブジェクトのレイヤーを分けようってこと。
-// もっとも背景の色が変わる場合は静的であっても変化はあるんだけどそこはそれ。
-// だからどっちかというと静的動的よりかは描画順の方が大事なのかな、でもまあいいよ。
-// だって背景後で描画したら全部消えちゃうでしょ。
-
-// この場合、flow(といっても矢印系とか)のdisplayとactor(特に動く点とか)のdisplayに特別な違いはなさそう。
-// ああそうか、背景は基本いじらないもんね。つまり毎フレーム基本同じものを使い続けるのがbackgroundで、
-// 毎フレームクリアして違う位置に描画するのを繰り返すのがobjectの方って感じかな。
-// さらにそれらもあらかじめ（今使ってるやつみたいに）グラフィックで描画内容を作っておいてそれを貼り付ける感じで。
-// それについても（形の変化とか）必要に応じてクリアの後更新するって感じなのね。
 
 // -------------------------------------------------------------------------------------------------- //
 function initialize(){
@@ -246,34 +260,70 @@ function initialize(){
   let p1 = new pattern1();
   p0.convertList.push(p1); // p0 → p1.
   p1.convertList.push(p0); // p1 → p0.
-  return p0;
+  return p0; // そうそう。これをentityにセットする。
 }
 
 // もしくは、p1, p2, p3. ... , pnとあって、p0からクリック位置によって各々のパターンに跳べるようにするとか。
 // で、またp0に戻ってきて、みたいな。そういうのも、いいね。
 
+// MassGameではこのpattern0に相当するところがpreparationでそれが終わったところで
+// delayなりallなりのシークエンスへと移行していったわけなんですが、
+// MovingVariousFigure的なあれはそれと全く違ってですね、
+// クリックするたびに違うパターンが現れる「だけ」ですから、何もすることが無いんですね。
+// ただ勝手にfigureがあっちいったりこっちいったりしているだけ。
+// だからそれを反映したものになっている、つまりこの時点でもう既に具体的なんですよね。だからどうってことも
+// ないですけど・・ずっとそういうの作ってきたわけですしおすし。
+
 class pattern0 extends flow{
   constructor(){
     super();
   }
-  initialize(_actor){}
+  initialize(_actor){
+    _actor.bgLayer.background(80, 40, 100);
+    let vecs = getVector([100, 200, 200], [200, 200, 100]);
+    let f0 = new constantFlow(vecs[0], vecs[1], 100);
+    let f1 = new constantFlow(vecs[1], vecs[2], 100);
+    let f2 = new constantFlow(vecs[2], vecs[0], 100);
+    let a0 = new movingActor(f0, 0);
+    let a1 = new movingActor(f1, 1);
+    let a2 = new movingActor(f2, 2);
+    _actor.actors = [a0, a1, a2];
+    _actor.actors.forEach(function(a){ a.activate(); })
+  }
   execute(_actor){
     // クリックされたらCOMPLETEDにしてね
     if(clickFlag){ _actor.setState(COMPLETED); clickFlag = false; }
   }
-  convert(_actor){} // 次のパターンにしてね
+  convert(_actor){
+    _actor.currentFlow = this.convertList[0];
+    _actor.reset();
+  }
 }
 
 class pattern1 extends flow(){
   constructor(){
     super();
   }
-  initialize(_actor){}
+  initialize(_actor){
+    _actor.bgLayer.background(50, 40, 100);
+    let vecs = getVector([300, 400, 400], [400, 400, 300]);
+    let f0 = new constantFlow(vecs[0], vecs[1], 100);
+    let f1 = new constantFlow(vecs[1], vecs[2], 100);
+    let f2 = new constantFlow(vecs[2], vecs[0], 100);
+    let a0 = new movingActor(f0, 0);
+    let a1 = new movingActor(f1, 1);
+    let a2 = new movingActor(f2, 2);
+    _actor.actors = [a0, a1, a2];
+    _actor.actors.forEach(function(a){ a.activate(); })
+  }
   execute(_actor){
     // クリックされたらCOMPLETEDにしてね
     if(clickFlag){ _actor.setState(COMPLETED); clickFlag = false; }
   }
-  convert(_actor){} // 次のパターンにしてね
+  convert(_actor){
+    _actor.currentFlow = this.convertList[0];
+    _actor.reset();
+  }
 }
 
 // -------------------------------------------------------------------------------------------------- //
