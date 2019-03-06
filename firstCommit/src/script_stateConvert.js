@@ -68,6 +68,18 @@ class flow{
   display(gr){} // 今気付いたけど本来actorもどこかしらの背景grに貼り付けて使うんじゃ・・
 }
 
+// 考えたんだけど
+// displayとrenderを分けたい。
+// 上のdisplay(gr)ってやってることはgrに自分をrenderingする操作。
+// displayは基本引数なしで、displayに対して何かする操作。分けたいのよね。
+// actorのあれも実質renderingだしなー。・・renderって意味が難しい。
+
+// flowのdisplayも_actor引数に取ったらどうだろう・・何か、変わる気がする。何か。
+// たとえばentityのdisplayに this.currentFlow.display(this) って書くとか。
+// あ、すべてじゃないけど。だって今まで扱ってきた点とかは普通に・・・んー。
+// 今考えたけど、objLayerに描いた時点ではまだdisplayされてないからやっぱdisplayっておかしいな・・renderやな・・
+// displayはそのターンのレンダリングがすべて終了した時点でそれを表に出す作業のような気がするんよね。
+
 // actorはflowをこなすだけの存在
 class actor{
   constructor(f = undefined){

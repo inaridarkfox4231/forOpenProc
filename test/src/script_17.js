@@ -1,36 +1,49 @@
 'use strict';
 // キーフラグの実験
-let kf;
+let keyFlag;
 let myColor;
 
 function setup(){
-  kf = new keyFlag();
   colorMode(HSB, 100);
   myColor = color(0, 100, 100);
+  keyFlag = 0;
 }
 
 function draw(){
   background(myColor);
   // 上キーで青、下キーで緑、右キーでオレンジ、左キーで紫。エンターキーで赤に戻る。
-
+  if(keyFlag & 1){
+    myColor = color(20, 100, 100);
+    keyReset();
+  }else if(keyFlag & 2){
+    myColor = color(40, 100, 100);
+    keyReset();
+  }else if(keyFlag & 4){
+    myColor = color(60, 100, 100);
+    keyReset();
+  }else if(keyFlag & 8){
+    myColor = color(80, 100, 100);
+    keyReset();
+  }else if(keyFlag & 16){
+    myColor = color(0, 100, 100);
+    keyReset();
+  }
 }
 
-class keyFlag{
-  constructor(){
-    this.flag = 0;
-    this.lastKey = 0; // 最後に押したキーのコード。
-    this.bitSet = {39:1, 40:2, 37:4, 38:8, 13:3};
-  }
-  update(){
-    // フレームの最初に押されていないとthis.lastKeyがその値になってフレームの最後に-1に戻る感じ。
-    if(keyIsDown(39)){ this.flag |= 1; }else{ this.flag ^= 1; } // 右向き矢印
-    if(keyIsDown(40)){ this.flag |= 2; }else{ this.flag ^= 2; } // 下向き矢印
-    if(keyIsDown(37)){ this.flag |= 4; }else{ this.flag ^= 4; } // 左向き矢印
-    if(keyIsDown(38)){ this.flag |= 8; }else{ this.flag ^= 8; } // 上向き矢印
-    if(keyIsDown(13)){ this.flag |= 16; }else{ this.flag ^= 16; } // エンターキー
-    // さらに、たとえば1のフラグが立っていないときに押されるとlastKeyに登録され、
-    // 立っているときは再登録されない感じ。（-1でも更新されない）
-    // keyIsDownで |= 1024 して離されたら ^= 1024する。そして& 1024でfalseのときだけ登録。
-    // 一方、値が使われる時にも0に変わる・・んー。
-  }
+// keuFlagの設定
+function keyTyped(){
+  if(keyCode === 13){ keyFlag |= 1; } // ENTER
+  if(keyCode === 97){ keyFlag |= 2; } // a
+  if(keyCode === 98){ keyFlag |= 4; } // b
+  if(keyCode === 99){ keyFlag |= 8; } // c
+  if(keyCode === 100){ keyFlag |= 16; } // d
+  // これで機能するんだったら、szawで→↓←↑ってのもいいかもね。
+  // それかクリック位置、あれは反応箇所をグリッドに分けて小さな整数にして処理すると
+  // 場合分けめんどくさくないからおすすめ。今日はここまででいいです。また明日。
+  console.log(keyCode);
+  console.log(RIGHT_ARROW);
+}
+// keyFlagのリセット
+function keyReset(){
+  keyFlag = 0;
 }
