@@ -63,7 +63,7 @@ class flow{
     if(n === 0){ _actor.setFlow(undefined); _actor.inActivate(); } // non-Activeにすることでエラーを防ぎます。
     else{ _actor.setFlow(this.convertList[randomInt(n)]); }
   }
-  display(gr){} // 今気付いたけど本来actorもどこかしらの背景grに貼り付けて使うんじゃ・・
+  render(gr){} // 貼り付け関数なので名前をrenderにしました。
 }
 
 // fromからtoへspanフレーム数で移動するflow.
@@ -85,7 +85,7 @@ class constantFlow extends flow{
     if(prg === 1){ _actor.setState(COMPLETED); }
   }
   // grは基本的にbgLayerに描くけどactorに装備されてobjLayerに描くこともあるという。
-  display(gr){
+  render(gr){
     gr.push();
     gr.strokeWeight(1.0);
     gr.line(this.from.x, this.from.y, this.to.x, this.to.y);
@@ -126,7 +126,7 @@ class actor{
   idleAction(){ this.currentFlow.initialize(this); this.setState(IN_PROGRESS); }
   in_progressAction(){ this.currentFlow.execute(this); } // いつCOMPLETEDするかはflowが決める（当然）
   completedAction(){ this.currentFlow.convert(this); this.setState(IDLE); } // convertで次のflowが与えられる
-  display(gr){} // actorはそれ専用のsheetに貼り付けるのでgraphicを引数に取ります、多分。
+  render(gr){} // sheetに貼り付ける関数
 }
 
 // 以下がビジュアルの部分. とりあえずシンプルにいきましょう。
@@ -143,8 +143,8 @@ class movingActor extends actor{
   getPos(){
     return this.pos;
   }
-  display(gr){
-    this.visual.display(gr, this.pos); // 自分の位置に表示
+  render(gr){
+    this.visual.render(gr, this.pos); // 自分の位置に表示
   }
 }
 
@@ -166,7 +166,7 @@ class figure{
     img.rect(16, 16, 2, 5);
     img.rect(24, 16, 2, 5);
   }
-  display(gr, pos){
+  render(gr, pos){
     gr.push();
     gr.translate(pos.x, pos.y);
     this.rotation += 0.1; // これも本来はfigureのupdateに書かないと・・基本的にupdate→drawの原則は破っちゃいけない
@@ -200,8 +200,9 @@ class entity extends actor{
     this.objLayer.clear();
   }
   display(){
-    image(this.bgLayer, 0, 0); // bgLayerの内容は各々のパターン（タイトルやセレクト）のexecuteに書いてある
-    image(this.objLayer, 0, 0);
+    this.currentFlow.display(this);
+    //image(this.bgLayer, 0, 0); // bgLayerの内容は各々のパターン（タイトルやセレクト）のexecuteに書いてある
+    //image(this.objLayer, 0, 0);
   }
 }
 
@@ -214,6 +215,25 @@ function initialize(){
   return p0; // そうそう。これをentityにセットする。
 }
 
+// これによってたとえばポーズ画面が導入できるようになる。
+// つまり、ポーズ画面特有のdisplay方法を使えるって事・・
+// 絵空事なんだけど、たとえばね、ボタンPとか？押すと、ポーズに移行。
+// 移行するときリセットとかはしない、ただexecuteをやめるだけ（inActivateとも違う）。
+// グラフィックはconvertするときにそのデータをポーズ画面stateのグラフィックにrenderingする。
+// そしてポーズのinitializeでそこに透明度のあるバックグラウンドを貼り付ける。（HSB100モードなら0, 0, 0, 40くらいで）
+// それがポーズstateにおけるbgLayerの代りみたいな感じになって、そのうえでカーソルとか動かす・・
+// ポーズstateはすべてのパターンから行くことができすべてのパターンに行くことができる。
+// ただしどこから来たのかを記憶していてそのパターンにしかconvertできない。
+// といいつつ・・・・
+// 実は、ポーズから別のpatternにconvertするシステムも考えている。サムネイル並んでてクリックで・・
+// patternごとにactorの集合とbgLayerとobjLayerを与えて、最初に訪れた時だけ
+// もろもろ準備する感じ。で、visitedがtrueになる。次に訪れたときはそこでのactorたちが
+// 中断させられていたexecuteを再開して再び動き出す感じで。で、visitedがtrueならinitializeはすっとばして・・とか。
+// つまりパターンシークエンスにおいてentityはactorやLayerの概念をもたず、それらはすべて
+// pauseとpattern持ちにするってこと、まあ一般的ではないかもだけど。内容が既に一般ではないし。
+// もしくは・・・
+// entityにもbgLayerやobjLayerを持たせておいて・・んー？？でもなぁ。
+
 class pattern extends flow{
   constructor(patternIndex){
     super();
@@ -224,8 +244,12 @@ class pattern extends flow{
   }
   execute(_entity){
     _entity.objLayer.clear(); // objLayerは毎フレームリセットしてactorを貼り付ける(displayableでなければスルーされる)
-    _entity.actors.forEach(function(a){ a.display(_entity.objLayer); })
+    _entity.actors.forEach(function(a){ a.render(_entity.objLayer); })
     if(clickFlag){ _entity.setState(COMPLETED); clickFlag = false; } // クリックしたらパターンチェンジ、の表現
+  }
+  display(_actor){
+    image(_actor.bgLayer, 0, 0);
+    image(_actor.objLayer, 0, 0);
   }
   convert(_entity){
     _entity.currentFlow = this.convertList[0]; // 普通のコンバート
@@ -240,7 +264,7 @@ class pattern extends flow{
       let vecs = getVector(posX, posY);
       let flowSet = pattern.getConstantFlows(vecs, [0, 1, 2, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10, 7, 9, 10, 11], [1, 2, 3, 0, 5, 6, 7, 4, 5, 6, 4, 5, 6, 11, 8, 9, 10], constSeq(40, 17));
       pattern.connectFlows(flowSet, [4, 8, 11, 5, 9, 12, 7, 3, 14, 10, 0, 15, 1, 16, 2, 6, 13], [[7], [7], [7], [8], [8], [8], [3], [0], [10], [3], [1, 4], [11, 14], [2, 5], [12, 15], [6], [9, 13], [16]]);
-      pattern.displayFlows(_entity.bgLayer, flowSet);
+      pattern.renderFlows(_entity.bgLayer, flowSet);
       let actorSet = pattern.getActors(flowSet, [0, 7, 14], [0, 1, 2]);
       _entity.actors = actorSet;
       pattern.activateAll(actorSet);
@@ -252,7 +276,7 @@ class pattern extends flow{
       let vecs = getVector(posX, posY);
       let flowSet = pattern.getConstantFlows(vecs, [0, 1, 2, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10, 7, 9, 10, 11], [1, 2, 3, 0, 5, 6, 7, 4, 5, 6, 4, 5, 6, 11, 8, 9, 10], constSeq(70, 17));
       pattern.connectFlows(flowSet, [4, 8, 11, 5, 9, 12, 7, 3, 14, 10, 0, 15, 1, 16, 2, 6, 13], [[7], [7], [7], [8], [8], [8], [3], [0], [10], [3], [1, 4], [11, 14], [2, 5], [12, 15], [6], [9, 13], [16]]);
-      pattern.displayFlows(_entity.bgLayer, flowSet);
+      pattern.renderFlows(_entity.bgLayer, flowSet);
       let actorSet = pattern.getActors(flowSet, [0, 7, 14], [0, 1, 2]);
       _entity.actors = actorSet;
       pattern.activateAll(actorSet);
@@ -275,9 +299,9 @@ class pattern extends flow{
       destinationSet[i].forEach(function(id){ flowSet[idSet[i]].convertList.push(flowSet[id]); })
     }
   }
-  static displayFlows(gr, flowSet){
+  static renderFlows(gr, flowSet){
     // graphicにflowをまとめて描画だぜ
-    flowSet.forEach(function(_flow){ _flow.display(gr); })
+    flowSet.forEach(function(_flow){ _flow.render(gr); })
   }
   static getActors(flows, flowIds, colorIds){
     // まとめてactorゲットだぜ（スピードが必要なら用意する）（あ、あとfigureIdほしいです）（ぜいたく～～）

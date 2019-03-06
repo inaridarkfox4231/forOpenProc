@@ -19,6 +19,8 @@ function setup(){
 
 function draw(){
   background(255);
+  fill(100, 100, 100, 100);
+  ellipse(200, 200, 200, 200);
   if(keyIsDown(70)){ x += 1; if(x > 255){ x = 255; } }
   else if(keyIsDown(67)){ x -= 1; if(x < 0){ x = 0; }}
   else if(keyIsDown(71)){ y += 1; if(y > 255){ y = 255; } }
@@ -35,6 +37,4 @@ function draw(){
   text(y, 60, 20);
   text(z, 100, 20);
   text(w, 140, 20);
-  fill(100, 100, 100, 100);
-  ellipse(200, 200, 200, 200);
 }

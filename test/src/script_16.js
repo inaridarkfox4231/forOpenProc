@@ -2,11 +2,15 @@
 
 function setup(){
   createCanvas(400, 400);
-  noLoop();
+  colorMode(HSB, 100);
 }
 
 function draw(){
-  background(220);
+  background(80, 100, 100);
+  fill(0, 100, 100);
+  noStroke();
+  ellipse(100, 100, 100, 100);
+  push();
   strokeWeight(1.0);
   stroke(0);
   line(100, 100, 200, 200);
@@ -14,6 +18,9 @@ function draw(){
   let v = createVector(200 - 100, 200 - 100);
   rotate(v.heading());
   line(0, 0, -15, 7);
+  pop();
+  fill(0, 0, 0, 40);
+  rect(70, 70, 300, 300); // これをかぶせればいいんかな
 }
 
 

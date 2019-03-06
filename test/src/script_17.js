@@ -5,12 +5,12 @@ let myColor;
 
 function setup(){
   colorMode(HSB, 100);
+  createGraphics(200, 200);
   myColor = color(0, 100, 100);
   keyFlag = 0;
 }
 
 function draw(){
-  background(myColor);
   // 上キーで青、下キーで緑、右キーでオレンジ、左キーで紫。エンターキーで赤に戻る。
   if(keyFlag & 1){
     myColor = color(20, 100, 100);
@@ -28,6 +28,10 @@ function draw(){
     myColor = color(0, 100, 100);
     keyReset();
   }
+  fill(myColor);
+  rect(40, 40, 40, 40);
+  fill(0, 40, 100, 50);
+  rect(0, 0, 200, 200);
 }
 
 // keuFlagの設定
