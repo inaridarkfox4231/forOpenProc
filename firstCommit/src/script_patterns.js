@@ -5,12 +5,16 @@ let all;
 let clickFlag;
 let hueSet;
 
+let myCanvas; // canvasをグローバルにする・・
+
+let pauseFlag = false;
+
 const IDLE = 0; // initialize前の状態
 const IN_PROGRESS = 1; // flow実行中の状態
 const COMPLETED = 2; // flowが完了した状態
 
 function setup(){
-  createCanvas(640, 480);
+  myCanvas = createCanvas(640, 480);
   colorMode(HSB, 100); // hueだけでいろいろ指定出来て便利なので。
   hueSet = [0, 10, 17, 35, 52, 64, 80];
   let initialFlow = initialize(); // 初期化でもろもろ準備して最後に最初のFlowを返す
@@ -25,8 +29,25 @@ function draw(){
 }
 
 // 押されたときは何も起こらない。押して離されたときに起きる。
+// ほんとうはバリデーションかけてやらないといけないんだけどね・・・いつでもクリック受け付けちゃうと困るから。
 function mouseClicked(){
   clickFlag = true;
+}
+
+// ここはね、単にクリック受け付けましたっていう風にして、何も起こらなかったらキャンセルするとかしないとなー。
+// たとえばクリック位置を記録するとかね。で、convertの時に(-1, -1)に戻すとかしないとね。
+
+// というわけで、
+// entityのページ遷移のときのメソッドであるcompletedActionのところにこれを置きました。
+// flagが他にもあったらここに追加する感じですかね・・で、これにより、ポーズ中にクリックしても
+// ポーズを解除した時次のパターンに移行しなくなります。すげぇ。
+// まあ、最終的にはポーズ画面から別のパターンに遷移できるようにしたいんだけどね・・・
+function flagReset(){
+  clickFlag = false;
+}
+
+function keyTyped(){
+  if(key === 'p'){ pauseFlag = !pauseFlag; }
 }
 
 // 簡単なカウンター
@@ -179,30 +200,24 @@ class figure{
 actor.index = 0;
 flow.index = 0;
 
+// -------------------------------------------------------------------------------------------------- //
+
+// 結局entityってflowに従ってパターンを出してるだけね・・ハードウェア的な。
 class entity extends actor{
   constructor(f = undefined){
     super(f);
-    this.actors = [];
-    this.bgLayer = createGraphics(640, 480);
-    this.objLayer = createGraphics(640, 480);
-    this.bgLayer.colorMode(HSB, 100);  // デフォルトはRGBモードなので注意する。
-    this.objLayer.colorMode(HSB, 100);
+    this.currentPatternIndex = f.patternIndex; // セットされたflowのindexになる。
   }
   in_progressAction(){
-    this.actors.forEach(function(a){ a.update(); }) // 構成メンバーのupdate
-    this.currentFlow.execute(this);
-  }
-  reset(){
-    actor.index = 0;  // カウントリセット
-    flow.index = 0;
-    this.actors = [];
-    this.bgLayer.clear();
-    this.objLayer.clear();
+    this.currentFlow.execute(this); // execute内容はflowに従ってね
   }
   display(){
-    this.currentFlow.display(this);
-    //image(this.bgLayer, 0, 0); // bgLayerの内容は各々のパターン（タイトルやセレクト）のexecuteに書いてある
-    //image(this.objLayer, 0, 0);
+    this.currentFlow.display(); // display内容はflowに従ってね
+  }
+  completedAction(){
+    this.currentFlow.convert(this); // convertで次のflowが与えられる
+    this.setState(IDLE);
+    flagReset(); // フラグをリセットする
   }
 }
 
@@ -210,8 +225,10 @@ class entity extends actor{
 function initialize(){
   let p0 = new pattern(0);
   let p1 = new pattern(1);
-  p0.convertList.push(p1); // p0 → p1.
-  p1.convertList.push(p0); // p1 → p0.
+  let pause = new pauseState();
+  p0.convertList = [p1, pause]; // p0 → p1, pause
+  p1.convertList = [p0, pause]; // p1 → p0, pause
+  pause.convertList = [p0, p1]; // pauseからp0, p1に行ける。原理的にはどこへも行けるのですよ。ハブのような感じ。
   return p0; // そうそう。これをentityにセットする。
 }
 
@@ -234,90 +251,153 @@ function initialize(){
 // もしくは・・・
 // entityにもbgLayerやobjLayerを持たせておいて・・んー？？でもなぁ。
 
+// というわけでやめました。entityがスカスカに・・いいのか、これ。
+
 class pattern extends flow{
   constructor(patternIndex){
     super();
     this.patternIndex = patternIndex; // indexに応じてパターンを生成
+    this.actors = [];
+    this.bgLayer = createGraphics(width, height);
+    this.objLayer = createGraphics(width, height);
+    this.bgLayer.colorMode(HSB, 100);
+    this.objLayer.colorMode(HSB, 100);
+    this.visited = false; // 最初に来た時にtrueになってそれ以降は再訪してもinitializeが実行されない。
   }
   initialize(_entity){
-    pattern.createPattern(this.patternIndex, _entity);
+    _entity.currentPatternIndex = this.patternIndex; // indexの更新
+    if(!this.visited){
+      createPattern(this.patternIndex, this);
+      this.visited = true;
+    }
   }
   execute(_entity){
-    _entity.objLayer.clear(); // objLayerは毎フレームリセットしてactorを貼り付ける(displayableでなければスルーされる)
-    _entity.actors.forEach(function(a){ a.render(_entity.objLayer); })
-    if(clickFlag){ _entity.setState(COMPLETED); clickFlag = false; } // クリックしたらパターンチェンジ、の表現
+    this.actors.forEach(function(a){ a.update(); })
+    this.objLayer.clear(); // objLayerは毎フレームリセットしてactorを貼り付ける(displayableでなければスルーされる)
+    this.actors.forEach(function(a){ a.render(this.objLayer); }, this)
+    if(pauseFlag){ _entity.setState(COMPLETED); }
+    else if(clickFlag){ _entity.setState(COMPLETED); clickFlag = false; } // クリックしたらパターンチェンジ、の表現
   }
-  display(_actor){
-    image(_actor.bgLayer, 0, 0);
-    image(_actor.objLayer, 0, 0);
+  display(){
+    image(this.bgLayer, 0, 0);
+    image(this.objLayer, 0, 0);
   }
   convert(_entity){
-    _entity.currentFlow = this.convertList[0]; // 普通のコンバート
-    _entity.reset(); // 移るときはリセット
+    if(pauseFlag){
+      //this.convertList[1].preRender(this.bgLayer, this.objLayer) // preRendering, これによりカバーが掛けられる
+      _entity.currentFlow = this.convertList[1];
+    } // 1番がpause.
+    else{ _entity.currentFlow = this.convertList[0]; } // 0番が次。
+    //_entity.reset(); // 移るときはリセット, しない？
   }
-  static createPattern(index, _entity){
-    if(index === 0){
-      // パターンを記述（横3, 縦2の一般的な格子）
-      _entity.bgLayer.background(0, 30, 100);
-      let posX = multiSeq(arSeq(100, 100, 4), 3);
-      let posY = jointSeq([constSeq(100, 4), constSeq(200, 4), constSeq(300, 4)]);
-      let vecs = getVector(posX, posY);
-      let flowSet = pattern.getConstantFlows(vecs, [0, 1, 2, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10, 7, 9, 10, 11], [1, 2, 3, 0, 5, 6, 7, 4, 5, 6, 4, 5, 6, 11, 8, 9, 10], constSeq(40, 17));
-      pattern.connectFlows(flowSet, [4, 8, 11, 5, 9, 12, 7, 3, 14, 10, 0, 15, 1, 16, 2, 6, 13], [[7], [7], [7], [8], [8], [8], [3], [0], [10], [3], [1, 4], [11, 14], [2, 5], [12, 15], [6], [9, 13], [16]]);
-      pattern.renderFlows(_entity.bgLayer, flowSet);
-      let actorSet = pattern.getActors(flowSet, [0, 7, 14], [0, 1, 2]);
-      _entity.actors = actorSet;
-      pattern.activateAll(actorSet);
-    }else if(index === 1){
-      // パターンを記述
-      _entity.bgLayer.background(40, 30, 100);
-      let posX = multiSeq(arSeq(100, 100, 4), 3);
-      let posY = jointSeq([constSeq(200, 4), constSeq(300, 4), constSeq(400, 4)]);
-      let vecs = getVector(posX, posY);
-      let flowSet = pattern.getConstantFlows(vecs, [0, 1, 2, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10, 7, 9, 10, 11], [1, 2, 3, 0, 5, 6, 7, 4, 5, 6, 4, 5, 6, 11, 8, 9, 10], constSeq(70, 17));
-      pattern.connectFlows(flowSet, [4, 8, 11, 5, 9, 12, 7, 3, 14, 10, 0, 15, 1, 16, 2, 6, 13], [[7], [7], [7], [8], [8], [8], [3], [0], [10], [3], [1, 4], [11, 14], [2, 5], [12, 15], [6], [9, 13], [16]]);
-      pattern.renderFlows(_entity.bgLayer, flowSet);
-      let actorSet = pattern.getActors(flowSet, [0, 7, 14], [0, 1, 2]);
-      _entity.actors = actorSet;
-      pattern.activateAll(actorSet);
-    }
+}
+
+class pauseState extends flow{
+  constructor(){
+    super();
+    this.bgLayer = createGraphics(width, height);
   }
-  static getConstantFlows(vecs, fromIds, toIds, spans){
-    // constantFlowをまとめてゲットだぜ
-    let flowSet = [];
-    for(let i = 0; i < fromIds.length; i++){
-      let _flow = new constantFlow(vecs[fromIds[i]], vecs[toIds[i]], spans[i]);
-      flowSet.push(_flow);
-    }
-    return flowSet;
+  //preRender(gr1, gr2){} // やめた
+  initialize(_entity){
+    // 現時点でのcanvasの状態をまずレンダリング
+    this.bgLayer.image(myCanvas, 0, 0);
+    // 次に、グレーのカバーを掛ける
+    this.bgLayer.fill(0, 0, 0, 80);
+    this.bgLayer.noStroke();
+    this.bgLayer.rect(0, 0, width, height);
+    // 最後にポーズのテキスト、ここは研究が必要そうね・・
+    this.bgLayer.fill(255);
+    this.bgLayer.textSize(40);
+    this.bgLayer.text("PAUSE", 240, 120);
+    this.bgLayer.textSize(20);
+    this.bgLayer.text("CURRENT PATTERN:" + " " + _entity.currentPatternIndex.toString(), 180, 180);
+    this.bgLayer.text('NEXT PATTERN (CLICK)', 180, 240);
+    this.bgLayer.text('PREVIOUS PATTERN (CLICK)', 180, 300);
   }
-  // flowの登録関数は今までと同じようにいくらでも増やすことができる。
-  // 今までと違ってグローバルの関数としてではなく、patternClassのstaticメソッドとしてだけど。
-  static connectFlows(flowSet, idSet, destinationSet){
-    // idSetの各idのflowにdestinationSetの各flowIdSetに対応するflowが登録される（はずだぜ）
-    for(let i = 0; i < idSet.length; i++){
-      destinationSet[i].forEach(function(id){ flowSet[idSet[i]].convertList.push(flowSet[id]); })
-    }
+  display(_entity){
+    // displayでそれを描画するんだけど、何かしたいとき、たとえばobjLayerも用意して何かしらのオブジェクトを
+    // 動かすとか、あるいは普通にカーソルの位置情報の変更とかしたいんだったらobjLayerも用意して、
+    // executeで然るべくキー操作を受け付けていろいろやる必要があるけどね。
+    image(this.bgLayer, 0, 0);
   }
-  static renderFlows(gr, flowSet){
-    // graphicにflowをまとめて描画だぜ
-    flowSet.forEach(function(_flow){ _flow.render(gr); })
+  execute(_entity){
+    // というわけでポーズ中に何かしたいときはここに書いてね！
+    if(!pauseFlag){ _entity.setState(COMPLETED); } // pボタンでポーズ解除
   }
-  static getActors(flows, flowIds, colorIds){
-    // まとめてactorゲットだぜ（スピードが必要なら用意する）（あ、あとfigureIdほしいです）（ぜいたく～～）
-    let actorSet = [];
-    for(let i = 0; i < flowIds.length; i++){
-      let _actor = new movingActor(flows[flowIds[i]], colorIds[i]);
-      actorSet.push(_actor);
-    }
-    return actorSet;
+  convert(_entity){
+    this.bgLayer.clear();
+    // pauseStateのconvertListは0, 1, 2の順にすべてのpatternがindex順で入ってるからそれを呼び出すだけ
+    _entity.currentFlow = this.convertList[_entity.currentPatternIndex];
+    // なんだけど、多分このままだと・・んー。
   }
-  static setActorPoses(vecs, vecIds, actorSet){
-    for(let i = 0; i < vecs.length; i++){ actorSet[i].setPos(vecs[vecIds[i]]); }
+}
+
+// ----------------------------------------------------------------------------------------------- //
+
+// パターン生成関数
+function createPattern(index, _pattern){
+  if(index === 0){
+    // パターンを記述（横3, 縦2の一般的な格子）
+    _pattern.bgLayer.background(0, 30, 100);
+    let posX = multiSeq(arSeq(100, 100, 4), 3);
+    let posY = jointSeq([constSeq(100, 4), constSeq(200, 4), constSeq(300, 4)]);
+    let vecs = getVector(posX, posY);
+    let flowSet = getConstantFlows(vecs, [0, 1, 2, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10, 7, 9, 10, 11], [1, 2, 3, 0, 5, 6, 7, 4, 5, 6, 4, 5, 6, 11, 8, 9, 10], constSeq(40, 17));
+    connectFlows(flowSet, [4, 8, 11, 5, 9, 12, 7, 3, 14, 10, 0, 15, 1, 16, 2, 6, 13], [[7], [7], [7], [8], [8], [8], [3], [0], [10], [3], [1, 4], [11, 14], [2, 5], [12, 15], [6], [9, 13], [16]]);
+    renderFlows(_pattern.bgLayer, flowSet);
+    let actorSet = getActors(flowSet, [0, 7, 14], [0, 1, 2]);
+    _pattern.actors = actorSet;
+    activateAll(actorSet);
+  }else if(index === 1){
+    // パターンを記述
+    _pattern.bgLayer.background(40, 30, 100);
+    let posX = multiSeq(arSeq(100, 100, 4), 3);
+    let posY = jointSeq([constSeq(200, 4), constSeq(300, 4), constSeq(400, 4)]);
+    let vecs = getVector(posX, posY);
+    let flowSet = getConstantFlows(vecs, [0, 1, 2, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10, 7, 9, 10, 11], [1, 2, 3, 0, 5, 6, 7, 4, 5, 6, 4, 5, 6, 11, 8, 9, 10], constSeq(70, 17));
+    connectFlows(flowSet, [4, 8, 11, 5, 9, 12, 7, 3, 14, 10, 0, 15, 1, 16, 2, 6, 13], [[7], [7], [7], [8], [8], [8], [3], [0], [10], [3], [1, 4], [11, 14], [2, 5], [12, 15], [6], [9, 13], [16]]);
+    renderFlows(_pattern.bgLayer, flowSet);
+    let actorSet = getActors(flowSet, [0, 7, 14], [0, 1, 2]);
+    _pattern.actors = actorSet;
+    activateAll(actorSet);
   }
-  static activateAll(actorSet){
-    actorSet.forEach(function(_actor){ _actor.activate(); })
+}
+
+function getConstantFlows(vecs, fromIds, toIds, spans){
+  // constantFlowをまとめてゲットだぜ
+  let flowSet = [];
+  for(let i = 0; i < fromIds.length; i++){
+    let _flow = new constantFlow(vecs[fromIds[i]], vecs[toIds[i]], spans[i]);
+    flowSet.push(_flow);
   }
+  return flowSet;
+}
+// flowの登録関数は今までと同じようにいくらでも増やすことができる。
+// 今までと同じようにグローバルの関数として。
+function connectFlows(flowSet, idSet, destinationSet){
+  // idSetの各idのflowにdestinationSetの各flowIdSetに対応するflowが登録される（はずだぜ）
+  for(let i = 0; i < idSet.length; i++){
+    destinationSet[i].forEach(function(id){ flowSet[idSet[i]].convertList.push(flowSet[id]); })
+  }
+}
+function renderFlows(gr, flowSet){
+  // graphicにflowをまとめて描画だぜ
+  flowSet.forEach(function(_flow){ _flow.render(gr); })
+}
+function getActors(flows, flowIds, colorIds){
+  // まとめてactorゲットだぜ（スピードが必要なら用意する）（あ、あとfigureIdほしいです）（ぜいたく～～）
+  let actorSet = [];
+  for(let i = 0; i < flowIds.length; i++){
+    let _actor = new movingActor(flows[flowIds[i]], colorIds[i]);
+    actorSet.push(_actor);
+  }
+  return actorSet;
+}
+function setActorPoses(vecs, vecIds, actorSet){
+  for(let i = 0; i < vecs.length; i++){ actorSet[i].setPos(vecs[vecIds[i]]); }
+}
+function activateAll(actorSet){
+  actorSet.forEach(function(_actor){ _actor.activate(); })
 }
 
 // -------------------------------------------------------------------------------------------------- //
@@ -423,5 +503,3 @@ function getVector(posX, posY){
   }
   return vecs;
 }
-
-// -------------------------------------------------------------------------------------------------- //

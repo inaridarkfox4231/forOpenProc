@@ -148,8 +148,8 @@ function initialize(){
   titleScene.addFlow(selectScene);
   selectScene.addFlow(playScene);
   playScene.convertList = [gameoverScene, clearScene];
-  gameoverScene.addFlow(selectScene);
-  clearScene.addFlow(selectScene);
+  gameoverScene.addFlow(titleScene);
+  clearScene.addFlow(titleScene);
   // 後は知らないけどね・・・
   return titleScene;
 }
