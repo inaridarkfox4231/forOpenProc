@@ -5,7 +5,7 @@ let indexMax = 5;
 function setup(){
   createCanvas(600, 600);
   index = 0;
-  //noLoop();
+  noLoop();
 }
 
 function mouseClicked(){
@@ -24,4 +24,8 @@ function draw(){
   text("CURRENT PATTERN:" + " " + index.toString(), 180, 180);
   text('NEXT PATTERN (CLICK)', 180, 240);
   text('PREVIOUS PATTERN (CLICK)', 180, 300);
+  fill(0);
+  rect(245, 420, 150, 40);
+  fill(255);
+  text("TO PAUSE", 270, 450);
 }
