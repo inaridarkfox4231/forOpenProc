@@ -1,8 +1,10 @@
 // sorting Machine.
 'use strict';
+let machine;
 
 function setup(){
   createGraphics(960, 640);
+  machine = new sortingMachine();
 }
 
 function draw(){
@@ -77,10 +79,14 @@ class actor{
 }
 
 class sortingMachine extends actor{
-  constructor(){
+  constructor(f = undefined){
+    super(f);
     this.items = [];
+    this.usedItems = []; // 使われたら一時的にここに入れて、そのあとでitemsに戻す。
     this.carrier = [];
-    this.
+  }
+  recycle(_actor){
+    this.usedItems.push(_actor);
   }
 }
 
@@ -104,7 +110,26 @@ class constantFlow extends flow{
 
 // sortHub. メインフロー。リストを持っており、それに従ってconvert先を決める
 class sortHub extends flow{
-  constructor(){}
+  constructor(x, y, itemIdList, numList){
+    super();
+    this.x = x; // シートの表示位置
+    this.y = y;
+    this.sheet = new itemSheet(itemIdList, numList);
+  }
+  convert(_actor){
+    let index = this.sheet.getIndex(_actor.itemId);
+    if(index < 0){ _actor.currentFlow = this.convertList[0]; return; } // スルーなら0.
+    let currentNum = this.sheet.numList[index];
+    if(currentNum === 0){
+      _actor.currentFlow = this.convertList[0]; // リストにあるけど0の場合
+    }else{
+      this.sheet.update(index, currentNum - 1); // リストの更新処理
+      _actor.currentFlow = this.convertList[1]; // そのまま落ちるなら1.
+    }
+  }
+  render(gr, x, y){
+    gr.image(this.sheet.graphic, x, y);
+  }
 }
 
 // itemListの画像とか更新処理がひとまとめになったクラス
@@ -113,24 +138,33 @@ class itemSheet{
     this.itemIdList = itemIdList;
     this.numList = numList;
     this.graphic = createGraphics(90, 40 * itemList.length); // 長さはitemの個数による
+    this.createSheet();
   }
-  getIndex(itemId){
-    let i;
-    for(i = 0; i < this.itemList.length; i++){
-      if(itemId === this.itemList[i]){ break; }
+  createSheet(){
+    this.graphic.colorMode(HSB, 100);
+    this.graphic.background(0);
+    for(let index = 0; index < this.itemIdList.length; index++){
+      createSubSheet(index);
     }
-    return i;
   }
-  update(itemId, newNum){
-    let index = this.getIndex(itemId);
-    this.graphic.push();
-    this.graphic.fill(0);
-    this.graphic.noStroke();
-    this.graphic.rect(40, 40 * index, 50, 40);
+  createSubSheet(index){
+    let id = itemIdList[index];
+    this.graphic.image(getGraphic(id % 7, Math.floor(id / 8)), 0, 40 * index);
     this.graphic.fill(100);
     this.graphic.textSize(20);
-    this.graphic.text(randomInt(200), 40, 28 + 40 * index);
-    this.graphic.pop();
+    this.graphic.text(this.numList[index], 40, 28 + 40 * index);
+  }
+  getIndex(itemId){
+    let len = this.itemIdList.length - 1;
+    while(len >= 0){
+      if(itemId === this.itemIdList[len]){ break; }
+      len--;
+    }
+    return len; // 見つからないなら-1を返す、の実装
+  }
+  update(index, newNum){
+    this.numList[index] = newNum;
+    this.createSubSheet(index);
   }
 }
 
@@ -152,4 +186,91 @@ class loading extends flow{
 // 運んでる
 class conveyor extends flow{
   constructor(){}
+}
+
+function getGraphic(myColorId, figureId){
+  let gr = createGraphics(40, 40);
+  gr.colorMode(HSB, 100);
+  // 形のバリエーションは個別のプログラムでやってね
+  let myColor = color(hueSet[myColorId], 100, 100);
+  gr.clear();
+  gr.push();
+  gr.noStroke();
+  gr.fill(myColor);
+  if(figureId === 0){
+    // 正方形
+    gr.rect(10, 10, 20, 20);
+    gr.fill(255);
+    gr.rect(15, 15, 2, 5);
+    gr.rect(23, 15, 2, 5);
+  }else if(figureId === 1){
+    // 星型
+    let outer = rotationSeq(0, -12, 2 * PI / 5, 5, 20, 20);
+    let inner = rotationSeq(0, 6, 2 * PI / 5, 5, 20, 20);
+    for(let i = 0; i < 5; i++){
+      let k = (i + 2) % 5;
+      let l = (i + 3) % 5;
+      gr.quad(outer[i].x, outer[i].y, inner[k].x, inner[k].y, 20, 20, inner[l].x, inner[l].y);
+    }
+    gr.fill(255);
+    gr.rect(15, 17, 2, 5);
+    gr.rect(23, 17, 2, 5);
+  }else if(figureId === 2){
+    // 三角形
+    gr.triangle(20, 20 - 24 / Math.sqrt(3), 32, 20 + (12 / Math.sqrt(3)), 8, 20 + (12 / Math.sqrt(3)));
+    gr.fill(255);
+    gr.rect(15, 17, 2, 5);
+    gr.rect(23, 17, 2, 5);
+  }else if(figureId === 3){
+    // ひしがた
+    gr.quad(28, 20, 20, 20 - 10 * Math.sqrt(3), 12, 20, 20, 20 + 10 * Math.sqrt(3));
+    gr.fill(255);
+    gr.rect(15, 17, 2, 5);
+    gr.rect(23, 17, 2, 5);
+  }else if(figureId === 4){
+    // 六角形
+    gr.quad(32, 20, 26, 20 - 6 * Math.sqrt(3), 14, 20 - 6 * Math.sqrt(3), 8, 20);
+    gr.quad(32, 20, 26, 20 + 6 * Math.sqrt(3), 14, 20 + 6 * Math.sqrt(3), 8, 20);
+    gr.fill(255);
+    gr.rect(15, 17, 2, 5);
+    gr.rect(23, 17, 2, 5);
+  }else if(figureId === 5){
+    // なんか頭ちょろってやつ
+    gr.ellipse(20, 20, 20, 20);
+    gr.triangle(20, 20, 20 - 5 * Math.sqrt(3), 15, 20, 0);
+    gr.fill(255);
+    gr.rect(15, 17, 2, 5);
+    gr.rect(23, 17, 2, 5);
+  }else if(figureId === 6){
+    // 逆三角形
+    gr.triangle(20, 20 + 24 / Math.sqrt(3), 32, 20 - (12 / Math.sqrt(3)), 8, 20 - (12 / Math.sqrt(3)));
+    gr.fill(255);
+    gr.rect(15, 17, 2, 5);
+    gr.rect(23, 17, 2, 5);
+  }else if(figureId === 7){
+    // デフォルト用の円形
+    gr.ellipse(20, 20, 20, 20);
+    gr.fill(255);
+    gr.rect(15, 17, 2, 5);
+    gr.rect(23, 17, 2, 5);
+  }
+  gr.pop();
+  return gr;
+}
+
+function rotationSeq(x, y, angle, n, centerX = 0, centerY = 0){
+  // (x, y)をangleだけ0回～n-1回回転させたもののセットを返す(中心はオプション、デフォルトは0, 0)
+  let array = [];
+  let vec = createVector(x, y);
+  array.push(createVector(x + centerX, y + centerY));
+  for(let k = 1; k < n; k++){
+    vec.set(vec.x * cos(angle) - vec.y * sin(angle), vec.x * sin(angle) + vec.y * cos(angle));
+    array.push(createVector(vec.x + centerX, vec.y + centerY));
+  }
+  return array;
+}
+
+function randomInt(n){
+  // 0, 1, ..., n-1のどれかを返す
+  return Math.floor(random(n));
 }

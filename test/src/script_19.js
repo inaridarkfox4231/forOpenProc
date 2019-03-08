@@ -2,17 +2,24 @@
 // sortingMachineに使う積込リストのビジュアル作成
 let dictVisual;
 let hueSet;
+let sample = {};
 
 function setup(){
   createCanvas(640, 480);
   colorMode(HSB, 100); // hueだけでいろいろ指定出来て便利。
   hueSet = [0, 10, 17, 35, 52, 64, 80];
   dictVisual = getDictVisual();
+  sample = {a0:22, b1:31, c4:42}
+  noLoop();
 }
 
 function draw(){
   background(60);
   image(dictVisual, 0, 0);
+  sample.forEach(function(d){ console.log(d); })
+  console.log(sample[10]);
+  console.log(sample[32]);
+  console.log(sample.length);
 }
 
 // 数字の変更はこれで行こう。
