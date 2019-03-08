@@ -12,7 +12,22 @@ function setup(){
 
 function draw(){
   background(60);
-  image(dictVisual, 20, 20);
+  image(dictVisual, 0, 0);
+}
+
+// 数字の変更はこれで行こう。
+// 黒いrectで覆ったうえで、白の数字で上書き。簡単でしょ。この方が。シンプル。
+// class化してメソッドで書き換えさせましょう。
+function mouseClicked(){
+  let index = randomInt(8);
+  dictVisual.push();
+  dictVisual.fill(0);
+  dictVisual.noStroke();
+  dictVisual.rect(40, 40 * index, 50, 40);
+  dictVisual.fill(100);
+  dictVisual.textSize(20);
+  dictVisual.text(randomInt(200), 40, 28 + 40 * index);
+  dictVisual.pop();
 }
 
 function getDictVisual(){
