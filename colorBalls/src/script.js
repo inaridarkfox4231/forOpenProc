@@ -4,6 +4,10 @@ let colors = []; // 0 to 119.
 
 let circles = [];
 
+// 時間表示の設置。
+const timeCounter = document.createElement('div');
+document.body.appendChild(timeCounter);
+
 function setup(){
   createCanvas(400, 400);
   colorLoad();
@@ -12,10 +16,14 @@ function setup(){
 }
 
 function draw(){
+  const start = performance.now();
   background(240);
   if(frameCount % 10 === 0){ createCircle(); }
   circles.forEach(function(c){ c.update(); c.draw(); })
   killCircle();
+  const end = performance.now();
+  const timeStr = (end - start).toPrecision(4);
+  timeCounter.innerText = `${timeStr}ms`;
 }
 
 function createCircle(){
